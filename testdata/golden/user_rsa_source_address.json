@@ -1,0 +1,21 @@
+{
+  "description": "user cert, RSA key, with source-address critical option",
+  "cert_type": "user",
+  "key_type": "rsa",
+  "principals": [
+    "alice"
+  ],
+  "ttl_seconds": 3600,
+  "extensions": {
+    "permit-pty": ""
+  },
+  "critical_options": {
+    "source-address": "10.0.0.0/8,192.168.0.0/16"
+  },
+  "expected_fields": {
+    "Type": "ssh-rsa-cert-v01@openssh.com user certificate",
+    "Principals": "alice",
+    "Critical Options": "source-address 10.0.0.0/8,192.168.0.0/16",
+    "Extensions": "permit-pty"
+  }
+}

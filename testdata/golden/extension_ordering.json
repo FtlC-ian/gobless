@@ -1,0 +1,22 @@
+{
+  "description": "user cert with extensions in lexicographic order verified",
+  "cert_type": "user",
+  "key_type": "rsa",
+  "principals": [
+    "alice"
+  ],
+  "ttl_seconds": 3600,
+  "extensions": {
+    "permit-agent-forwarding": "",
+    "permit-port-forwarding": "",
+    "permit-pty": "",
+    "permit-X11-forwarding": ""
+  },
+  "critical_options": {},
+  "expected_fields": {
+    "Type": "ssh-rsa-cert-v01@openssh.com user certificate",
+    "Principals": "alice",
+    "Extensions": "permit-X11-forwarding,permit-agent-forwarding,permit-port-forwarding,permit-pty",
+    "Extension Ordering": "lexicographic"
+  }
+}

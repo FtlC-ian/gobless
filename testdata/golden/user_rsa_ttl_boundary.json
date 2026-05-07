@@ -1,0 +1,19 @@
+{
+  "description": "user cert, RSA key, TTL of 1 second boundary case",
+  "cert_type": "user",
+  "key_type": "rsa",
+  "principals": [
+    "alice"
+  ],
+  "ttl_seconds": 1,
+  "extensions": {
+    "permit-pty": ""
+  },
+  "critical_options": {},
+  "expected_fields": {
+    "Type": "ssh-rsa-cert-v01@openssh.com user certificate",
+    "Principals": "alice",
+    "Valid": "pattern:^from .* to .* \\(1s\\)$",
+    "TTL Seconds": "1"
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "statusCode": 400,
+  "error": "invalid_request",
+  "message": "request is malformed or missing required fields",
+  "no_leak_assertions": [
+    "-----BEGIN",
+    "PRIVATE KEY",
+    "aws_secret",
+    "AWS_SECRET_ACCESS_KEY",
+    "Traceback",
+    "panic",
+    "goroutine "
+  ]
+}

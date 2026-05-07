@@ -1,0 +1,19 @@
+{
+  "description": "user cert, RSA key, with force-command critical option",
+  "cert_type": "user",
+  "key_type": "rsa",
+  "principals": [
+    "alice"
+  ],
+  "ttl_seconds": 3600,
+  "extensions": {},
+  "critical_options": {
+    "force-command": "/usr/local/bin/gobless-shell"
+  },
+  "expected_fields": {
+    "Type": "ssh-rsa-cert-v01@openssh.com user certificate",
+    "Principals": "alice",
+    "Critical Options": "force-command /usr/local/bin/gobless-shell",
+    "Extensions": "none"
+  }
+}

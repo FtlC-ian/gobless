@@ -1,0 +1,33 @@
+{
+  "name": "overlong_ttl",
+  "description": "Caller requests a TTL exceeding the configured maximum, e.g. 9999 hours.",
+  "request": {
+    "cert_type": "user",
+    "principals": [
+      "alice"
+    ],
+    "ttl_seconds": 35996400,
+    "public_key": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAITestFixtureOnly user@example"
+  },
+  "iam_context": {
+    "arn": "arn:aws:iam::111122223333:user/alice",
+    "account_id": "111122223333",
+    "username": "alice"
+  },
+  "policy": {
+    "expected_account_id": "111122223333",
+    "allow_privileged_principals": [],
+    "max_ttl_seconds": 3600
+  },
+  "expected": {
+    "decision": "deny",
+    "reason": "ttl_exceeds_max",
+    "no_leak_assertions": [
+      "-----BEGIN",
+      "aws_secret",
+      "AWS_SECRET_ACCESS_KEY",
+      "panic",
+      "goroutine "
+    ]
+  }
+}

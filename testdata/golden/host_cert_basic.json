@@ -1,0 +1,17 @@
+{
+  "description": "host cert, RSA key",
+  "cert_type": "host",
+  "key_type": "rsa",
+  "principals": [
+    "host.example.internal"
+  ],
+  "ttl_seconds": 3600,
+  "extensions": {},
+  "critical_options": {},
+  "expected_fields": {
+    "Type": "ssh-rsa-cert-v01@openssh.com host certificate",
+    "Principals": "host.example.internal",
+    "Critical Options": "none",
+    "Extensions": "none"
+  }
+}

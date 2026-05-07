@@ -1,0 +1,14 @@
+{
+  "statusCode": 403,
+  "error": "unauthorized",
+  "message": "request is not authorized",
+  "no_leak_assertions": [
+    "-----BEGIN",
+    "PRIVATE KEY",
+    "aws_secret",
+    "AWS_SECRET_ACCESS_KEY",
+    "Traceback",
+    "panic",
+    "goroutine "
+  ]
+}

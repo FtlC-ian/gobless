@@ -1,0 +1,14 @@
+{
+  "statusCode": 500,
+  "error": "internal_error",
+  "message": "internal server error",
+  "no_leak_assertions": [
+    "-----BEGIN",
+    "PRIVATE KEY",
+    "aws_secret",
+    "AWS_SECRET_ACCESS_KEY",
+    "Traceback",
+    "panic",
+    "goroutine "
+  ]
+}

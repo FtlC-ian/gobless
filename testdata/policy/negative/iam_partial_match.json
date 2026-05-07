@@ -1,0 +1,33 @@
+{
+  "name": "iam_partial_match",
+  "description": "Username matches the principal but ARN account segment does not match expected account.",
+  "request": {
+    "cert_type": "user",
+    "principals": [
+      "alice"
+    ],
+    "ttl_seconds": 3600,
+    "public_key": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAITestFixtureOnly user@example"
+  },
+  "iam_context": {
+    "arn": "arn:aws:iam::444455556666:user/team/alice",
+    "account_id": "444455556666",
+    "username": "alice"
+  },
+  "policy": {
+    "expected_account_id": "111122223333",
+    "allow_privileged_principals": [],
+    "max_ttl_seconds": 3600
+  },
+  "expected": {
+    "decision": "deny",
+    "reason": "iam_partial_match",
+    "no_leak_assertions": [
+      "-----BEGIN",
+      "aws_secret",
+      "AWS_SECRET_ACCESS_KEY",
+      "panic",
+      "goroutine "
+    ]
+  }
+}

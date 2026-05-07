@@ -1,0 +1,22 @@
+# Build outputs
+/build/
+/bootstrap
+/gobless.zip
+
+# Terraform local state and secrets
+**/.terraform/
+**/*.tfstate
+**/*.tfstate.*
+**/*.tfvars
+**/tfplan*
+crash.log
+crash.*.log
+
+# Local scratch backups
+*.bak
+*.bak2
+
+# Local Terraform backend config
+/deploy/terraform/backend.tf
+/backend.hcl
+

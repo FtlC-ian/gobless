@@ -1,0 +1,33 @@
+{
+  "name": "iam_account_mismatch",
+  "description": "IAM account ID does not match the expected account.",
+  "request": {
+    "cert_type": "user",
+    "principals": [
+      "alice"
+    ],
+    "ttl_seconds": 3600,
+    "public_key": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAITestFixtureOnly user@example"
+  },
+  "iam_context": {
+    "arn": "arn:aws:iam::444455556666:user/alice",
+    "account_id": "444455556666",
+    "username": "alice"
+  },
+  "policy": {
+    "expected_account_id": "111122223333",
+    "allow_privileged_principals": [],
+    "max_ttl_seconds": 3600
+  },
+  "expected": {
+    "decision": "deny",
+    "reason": "iam_account_mismatch",
+    "no_leak_assertions": [
+      "-----BEGIN",
+      "aws_secret",
+      "AWS_SECRET_ACCESS_KEY",
+      "panic",
+      "goroutine "
+    ]
+  }
+}

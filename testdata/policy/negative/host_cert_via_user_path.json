@@ -1,0 +1,34 @@
+{
+  "name": "host_cert_via_user_path",
+  "description": "Host certificate type is requested through the user certificate handler/path.",
+  "request": {
+    "cert_type": "host",
+    "handler": "user_cert",
+    "principals": [
+      "host.example.internal"
+    ],
+    "ttl_seconds": 3600,
+    "public_key": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAITestFixtureOnly user@example"
+  },
+  "iam_context": {
+    "arn": "arn:aws:iam::111122223333:user/alice",
+    "account_id": "111122223333",
+    "username": "alice"
+  },
+  "policy": {
+    "expected_account_id": "111122223333",
+    "allow_privileged_principals": [],
+    "max_ttl_seconds": 3600
+  },
+  "expected": {
+    "decision": "deny",
+    "reason": "certificate_type_not_allowed",
+    "no_leak_assertions": [
+      "-----BEGIN",
+      "aws_secret",
+      "AWS_SECRET_ACCESS_KEY",
+      "panic",
+      "goroutine "
+    ]
+  }
+}

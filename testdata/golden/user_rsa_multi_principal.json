@@ -1,0 +1,20 @@
+{
+  "description": "user cert, RSA key, multiple principals",
+  "cert_type": "user",
+  "key_type": "rsa",
+  "principals": [
+    "alice",
+    "alice-admin",
+    "deploy"
+  ],
+  "ttl_seconds": 3600,
+  "extensions": {
+    "permit-pty": ""
+  },
+  "critical_options": {},
+  "expected_fields": {
+    "Type": "ssh-rsa-cert-v01@openssh.com user certificate",
+    "Principals": "alice,alice-admin,deploy",
+    "Valid": "pattern:^from .* to .*$"
+  }
+}

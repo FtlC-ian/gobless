@@ -1,0 +1,24 @@
+{
+  "name": "wrong_principal",
+  "description": "Caller requests a principal that does not match the IAM identity username.",
+  "request": {
+    "cert_type": "user",
+    "principals": ["alice"],
+    "ttl_seconds": 3600,
+    "public_key": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAITestFixtureOnly user@example"
+  },
+  "iam_context": {
+    "arn": "arn:aws:iam::111122223333:user/bob",
+    "account_id": "111122223333",
+    "username": "bob"
+  },
+  "policy": {
+    "expected_account_id": "111122223333",
+    "allow_privileged_principals": []
+  },
+  "expected": {
+    "decision": "deny",
+    "reason": "principal_identity_mismatch",
+    "no_leak_assertions": ["-----BEGIN", "aws_secret", "panic", "goroutine "]
+  }
+}

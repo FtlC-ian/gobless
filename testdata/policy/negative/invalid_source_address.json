@@ -1,0 +1,36 @@
+{
+  "name": "invalid_source_address",
+  "description": "Caller provides a malformed CIDR source-address critical option.",
+  "request": {
+    "cert_type": "user",
+    "principals": [
+      "alice"
+    ],
+    "ttl_seconds": 3600,
+    "critical_options": {
+      "source-address": "not-a-cidr"
+    },
+    "public_key": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAITestFixtureOnly user@example"
+  },
+  "iam_context": {
+    "arn": "arn:aws:iam::111122223333:user/alice",
+    "account_id": "111122223333",
+    "username": "alice"
+  },
+  "policy": {
+    "expected_account_id": "111122223333",
+    "allow_privileged_principals": [],
+    "max_ttl_seconds": 3600
+  },
+  "expected": {
+    "decision": "deny",
+    "reason": "invalid_source_address",
+    "no_leak_assertions": [
+      "-----BEGIN",
+      "aws_secret",
+      "AWS_SECRET_ACCESS_KEY",
+      "panic",
+      "goroutine "
+    ]
+  }
+}
