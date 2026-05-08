@@ -18,7 +18,7 @@ For detailed step-by-step runbooks (initial deployment, CA key rotation, inciden
 | `GOBLESS_CA_KMS_KEY_ID` | KMS key ID or ARN used for CA signing | `alias/gobless-ca` |
 | `GOBLESS_CA_MAX_TTL` | Maximum certificate lifetime in seconds | `3600` |
 | `GOBLESS_CA_DEFAULT_TTL` | Default certificate lifetime in seconds when the request omits TTL | `3600` |
-| `GOBLESS_CA_SIGNER_TYPE` | Signer backend: `kms` (production) or `pem` (local dev only) | `kms` |
+| `GOBLESS_CA_SIGNER_TYPE` | Signer backend: `kms` (production) or `rsa` (local PEM dev only) | `kms` |
 | `GOBLESS_PRINCIPAL_ALLOWED` | Comma-separated list of allowed SSH principals | `ec2-user,ubuntu` |
 | `GOBLESS_CA_DYNAMODB_TABLE` | DynamoDB table name for audit events (optional) | `gobless-audit` |
 | `GOBLESS_LOGGING_AUDIT_ENABLED` | Enable audit logging (`true`/`false`) | `true` |
