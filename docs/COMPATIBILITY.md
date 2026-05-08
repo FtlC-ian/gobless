@@ -1,6 +1,6 @@
 # GoBless BLESS Compatibility
 
-GoBless targets BLESS-compatible behavior for direct AWS Lambda invocation and OpenSSH certificate output. Compatibility means existing BLESS operators should be able to determine whether a migration requires no change, config-only change, or client/code change.
+GoBless targets BLESS-compatible behavior for API Gateway-backed AWS Lambda signing flows and OpenSSH certificate output. Compatibility means existing BLESS operators should be able to determine whether a migration requires no change, config-only change, or client/code change.
 
 ## Feature matrix
 
@@ -15,21 +15,22 @@ GoBless targets BLESS-compatible behavior for direct AWS Lambda invocation and O
 | KMS key | ✓ | Preferred production mode. Private key never leaves KMS. |
 | Encrypted PEM | ✓ with warning | Explicit fallback only. Not recommended for production because plaintext key material exists in memory. |
 | `kmsauth` | ✗ | Out of scope for v0.1. |
-| IAM Lambda invoke | ✓ | Direct Lambda invocation is the v0.1 authentication boundary. |
-| API Gateway / OIDC | Later | Out of scope for v0.1. |
+| API Gateway AWS_IAM | ✓ | Current production entrypoint expects API Gateway proxy events and trusted IAM identity in request context. |
+| Direct IAM Lambda invoke | ✗ for end users | Direct invoke payloads cannot safely provide caller identity to this handler. Operator smoke tests only. |
+| OIDC | Later | Out of scope for v0.1. |
 
 ## Compatibility contract
 
 ### Invocation
 
-GoBless v0.1 supports direct AWS Lambda invocation by IAM-authenticated callers. The Lambda handler should accept BLESS-style request shapes for:
+GoBless v0.1 supports API Gateway proxy integration with AWS_IAM authorization. The Lambda handler accepts API Gateway-shaped events whose `body` contains the signing request. Trusted caller identity comes from API Gateway request context, not from request-body fields.
+
+Implemented request bodies cover:
 
 - user certificate signing;
-- host certificate signing;
-- CA public key export;
-- legacy handler names where compatibility can be preserved without weakening authorization.
+- host certificate signing.
 
-Request-body identity claims are not trusted. IAM caller identity is the authentication source; GoBless policy decides certificate contents.
+CA public key export is currently provided by the local `ca-pubkey` CLI path, not by the production Lambda handler. Direct Lambda invocation is not a secure end-user boundary for this handler because callers can control the event payload, including any spoofed `requestContext`.
 
 ### Response behavior
 
@@ -81,7 +82,7 @@ These differences are deliberate security decisions, not accidental incompatibil
 4. **Random serials are used.** GoBless does not provide monotonic serial allocation in v0.1. KeyID is the audit correlation key.
 5. **Unicode-confusable principals are rejected.** Conservative canonical principal parsing is preferred over accepting visually ambiguous names.
 6. **Audit failure is production-fail-closed by default.** Operators may configure a narrow emergency mode only if documented and reviewed.
-7. **No `kmsauth` in v0.1.** Direct IAM Lambda invoke is the supported authentication path.
+7. **No `kmsauth` in v0.1.** API Gateway AWS_IAM is the supported authentication path for the production handler.
 8. **RSA below 2048 bits is rejected.** This is a deliberate BLESS compatibility difference to avoid silently accepting weak legacy keys.
 9. **No silent backdated certificates.** `valid-after` defaults to issuance time; any compatibility clock-skew/backdating mode must be explicit, bounded, and tested.
 10. **No framework compatibility layer.** GoBless uses small internal interfaces and standard library code instead of web/config/logging frameworks.

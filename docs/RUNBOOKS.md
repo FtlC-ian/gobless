@@ -52,24 +52,28 @@ Expected: Terraform asks for approval, then reports resources created or changed
 
 Review the plan before approving. After apply, note the Lambda function name, KMS key ID, and DynamoDB audit table name from Terraform outputs or the AWS console.
 
-### Verify Lambda invocation
+### Verify Lambda startup
 
-Create a request payload and invoke the function to confirm IAM access and Lambda startup are working:
+The Terraform module deploys the Lambda/KMS/DynamoDB backend only. The production handler expects an API Gateway proxy-style event with trusted caller identity supplied by API Gateway AWS_IAM authorization. Do not use direct `lambda:InvokeFunction` permissions as the end-user authorization boundary.
+
+For backend smoke testing before an API Gateway is attached, an operator may invoke a controlled API Gateway-shaped fixture to confirm Lambda startup, config loading, KMS access, and stable error handling. Treat this as an operator-only smoke test; do not grant this path to certificate requesters.
 
 ```bash
-cat > /tmp/gobless-request.json <<'EOF'
+cat > /tmp/gobless-apigw-smoke.json <<'EOF'
 {
-  "public_key": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIN6lhLmBMxwSXiMkEFoFxMeSu0ZHwgMSrMREJVtEXAMPLE alice@workstation",
-  "cert_type": "user",
-  "principals": ["alice"],
-  "ttl_seconds": 3600,
-  "source_address": "203.0.113.42/32"
+  "body": "{\"public_key\":\"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIN6lhLmBMxwSXiMkEFoFxMeSu0ZHwgMSrMREJVtEXAMPLE alice@workstation\",\"cert_type\":\"user\",\"principals\":[\"alice\"],\"ttl_seconds\":3600,\"source_address\":\"203.0.113.42/32\"}",
+  "requestContext": {
+    "accountId": "111122223333",
+    "identity": {
+      "userArn": "arn:aws:iam::111122223333:user/alice"
+    }
+  }
 }
 EOF
 
 aws lambda invoke \
   --function-name gobless \
-  --payload fileb:///tmp/gobless-request.json \
+  --payload fileb:///tmp/gobless-apigw-smoke.json \
   /tmp/gobless-response.json
 
 cat /tmp/gobless-response.json
@@ -77,7 +81,7 @@ cat /tmp/gobless-response.json
 
 Expected: the AWS CLI writes status metadata and `response.json` contains either a certificate response or a stable validation/policy error. Stop if the invoke fails with `AccessDeniedException`, `ResourceNotFoundException`, or an unhandled runtime error.
 
-A policy or validation error still proves that IAM invocation and Lambda startup are working. A successful certificate response requires a valid signing request, a caller principal that policy allows, and a trusted client request shape.
+A successful certificate response requires a valid signing request, configured principals, KMS access, and a trusted integration that supplies caller identity. A policy or validation error can still prove Lambda startup and error handling, but it does not validate the full end-user issuance path.
 
 ## Rotating the CA
 

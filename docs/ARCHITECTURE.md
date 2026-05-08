@@ -11,7 +11,7 @@ flowchart LR
         PUB[SSH public key]
     end
 
-    subgraph AWSInvoke[AWS IAM invocation layer]
+    subgraph AWSInvoke[API Gateway AWS_IAM invocation layer]
         IAM[AWS IAM / STS identity]
         LAMBDA[Lambda handler]
     end
@@ -29,7 +29,7 @@ flowchart LR
         PEM[Encrypted PEM fallback]
     end
 
-    CLI -->|signed Lambda invoke request| LAMBDA
+    CLI -->|AWS_IAM-signed API Gateway request| LAMBDA
     PUB --> CLI
     IAM -->|caller identity context| LAMBDA
     LAMBDA --> CFG
@@ -64,7 +64,7 @@ Host certificate authorization is separate from user certificate authorization.
 
 ### Lambda handler
 
-The Lambda handler is the request/response adapter. It receives direct Lambda invocation events, extracts trusted AWS caller identity from invocation context, decodes request JSON, and calls config, policy, certificate builder, signer, and audit in order. It returns BLESS-compatible success responses and stable, non-secret error responses.
+The Lambda handler is the request/response adapter. It receives API Gateway proxy events, extracts trusted AWS caller identity from API Gateway request context, decodes request JSON from the event body, and calls config, policy, certificate builder, signer, and audit in order. It returns BLESS-compatible success responses and stable, non-secret error responses.
 
 The handler does not make authorization decisions inline — anything beyond syntactic request rejection goes through policy.
 
@@ -80,14 +80,14 @@ Audit failures are explicit. Production policy fails closed unless an emergency 
 
 ### CLI client
 
-The CLI client is the user-facing request tool. It reads or generates the SSH public key, discovers caller identity through AWS credentials, submits BLESS-compatible request shapes, and prints returned certificates and CA public keys.
+The CLI client is the user-facing request tool. It reads or generates the SSH public key, signs an API Gateway request with AWS credentials, submits BLESS-compatible request bodies, and prints returned certificates. Local development also supports `ca-pubkey` for CA public key export.
 
 ## Trust boundaries
 
 | Boundary | What's trusted inside | What's untrusted | Rule |
 | --- | --- | --- | --- |
 | Caller workstation | User keypair, local CLI arguments | Local shell environment, filesystem, request body | Server validates every requested principal and option. |
-| AWS IAM invocation | AWS-authenticated principal and invocation authorization | Request JSON fields claiming usernames, hosts, TTL, IPs | IAM allows invocation; policy authorizes certificate contents. |
+| API Gateway AWS_IAM invocation | AWS-authenticated principal and API Gateway request context | Request JSON fields claiming usernames, hosts, TTL, IPs | API Gateway authenticates caller identity; policy authorizes certificate contents. |
 | GoBless process | Internal validated request objects | Lambda event payload and environment strings before validation | Decode, validate, and normalize before use. |
 | CA key custody | KMS private key or decrypted PEM during signing | Lambda logs, audit events, request/response data | Private key is never serialized or logged; prefer KMS. |
 | Audit backend | Append-only audit records and backend IAM controls | Caller-controlled request content | Audit records decisions with redacted, normalized fields. |
@@ -111,7 +111,7 @@ Lambda handler
     └── Backend implementation, for example DynamoDB via AWS SDK v2
 
 CLI client
-├── AWS Lambda invoke client: AWS SDK v2 Lambda client
+├── AWS_IAM-signed HTTPS client for API Gateway
 ├── SSH key parsing: golang.org/x/crypto/ssh
 └── Output formatting
 ```
@@ -122,8 +122,8 @@ No component may import a concrete AWS client except AWS adapter packages. Core 
 
 ### User certificate request
 
-1. CLI reads the user's SSH public key and invokes the Lambda using AWS credentials.
-2. Lambda receives the event and obtains the trusted AWS caller identity from IAM/invocation context.
+1. CLI reads the user's SSH public key and sends an AWS_IAM-signed request through API Gateway.
+2. Lambda receives the API Gateway proxy event and obtains trusted caller identity from request context.
 3. Handler decodes request body and rejects malformed JSON or unsupported request type.
 4. Config loader supplies policy and compatibility settings.
 5. Policy engine validates:
@@ -139,8 +139,8 @@ No component may import a concrete AWS client except AWS adapter packages. Core 
 
 ### Host certificate request
 
-1. Authorized automation or host bootstrap process invokes Lambda with AWS credentials.
-2. Lambda obtains trusted IAM caller identity.
+1. Authorized automation or host bootstrap process sends an AWS_IAM-signed request through API Gateway.
+2. Lambda obtains trusted IAM caller identity from API Gateway request context.
 3. Policy engine validates the caller is allowed to request host certificates.
 4. Policy validates requested host principals against configured host allowlists, instance identity rules, or explicit mappings.
 5. Certificate builder emits an OpenSSH host certificate with approved host principals, TTL, KeyID, and random serial.
@@ -152,10 +152,6 @@ User-principal binding rules do not automatically authorize host certificates. H
 
 ### CA public key export
 
-1. CLI invokes the public-key export operation or reads a published CA public key artifact.
-2. Lambda handler authorizes the operation according to config. Public export may be allowed broadly, but invocation still uses IAM unless another distribution path is configured.
-3. Signer returns only the CA public key.
-4. Handler formats the key as an OpenSSH authorized key line.
-5. Audit records export operation without certificate fields.
+The production Lambda handler does not currently expose a CA public key export operation. Operators should publish the CA public key through their deployment process, or use the local `gobless ca-pubkey` development command against approved local configuration.
 
-Private CA key material is never returned by this flow.
+Private CA key material must never be returned by any export flow.

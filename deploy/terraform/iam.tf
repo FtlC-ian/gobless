@@ -61,21 +61,3 @@ resource "aws_iam_role_policy" "lambda_execution" {
   role   = aws_iam_role.lambda_execution.id
   policy = data.aws_iam_policy_document.lambda_execution.json
 }
-
-data "aws_iam_policy_document" "invoker" {
-  statement {
-    sid    = "AllowInvokeGoBless"
-    effect = "Allow"
-
-    actions = ["lambda:InvokeFunction"]
-
-    resources = [aws_lambda_function.gobless.arn]
-  }
-}
-
-resource "aws_iam_policy" "invoker" {
-  name        = "${var.function_name}-invoker"
-  description = "Allows callers to invoke the GoBless Lambda function. Attach to authorized caller roles or users."
-  policy      = data.aws_iam_policy_document.invoker.json
-  tags        = var.tags
-}

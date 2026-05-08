@@ -27,7 +27,7 @@ Host certificate authorization is separate from user certificate authorization. 
 
 ## Rationale
 
-IAM answers "who invoked Lambda?" It does not answer "what SSH identity should this certificate contain?" Treating request-body principals as trusted would let any invoker request privileged principals by editing JSON. Binding IAM identity to requested principals preserves the core BLESS security property while still allowing explicit policy exceptions.
+API Gateway AWS_IAM context answers "who invoked GoBless?" It does not answer "what SSH identity should this certificate contain?" Treating request-body principals as trusted would let any caller request privileged principals by editing JSON. Binding IAM identity to requested principals preserves the core BLESS security property while still allowing explicit policy exceptions.
 
 ## Rules
 

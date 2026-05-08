@@ -6,7 +6,7 @@ Issues: #42, #44
 
 ## Context
 
-OpenSSH certificates can include a `source-address` critical option that limits where the certificate may be used. In the direct AWS Lambda invocation model, Lambda does not provide the function with a trustworthy TCP peer address for the eventual SSH client connection. BLESS-compatible callers may provide source-address values in the signing request, but request payload fields are caller-controlled.
+OpenSSH certificates can include a `source-address` critical option that limits where the certificate may be used. In the API Gateway/Lambda invocation model, the request context does not provide a trustworthy TCP peer address for the eventual SSH client connection. BLESS-compatible callers may provide source-address values in the signing request, but request payload fields are caller-controlled.
 
 GoBless also accepts RSA public keys for BLESS/OpenSSH compatibility. Accepting undersized RSA keys would be a silent security regression, especially for older BLESS-era clients or fixtures that might still use 1024-bit RSA.
 

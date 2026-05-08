@@ -5,7 +5,7 @@ This Terraform module deploys GoBless on AWS with the production-oriented archit
 - AWS Lambda runs the GoBless handler.
 - AWS KMS holds the asymmetric RSA-4096 CA signing key; private key material never leaves KMS.
 - DynamoDB stores audit events with point-in-time recovery and TTL enabled.
-- IAM separates the Lambda execution role from the caller invoker policy.
+- IAM grants the Lambda execution role only the KMS, DynamoDB, and log permissions needed by the backend.
 
 ## Prerequisites
 
@@ -19,7 +19,7 @@ From the repository root, build a Linux Lambda binary named `bootstrap` and zip 
 
 ```bash
 mkdir -p build
-GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o build/bootstrap ./cmd/gobless
+GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -tags production -o build/bootstrap ./cmd/gobless
 (cd build && zip gobless.zip bootstrap)
 ```
 
@@ -60,18 +60,6 @@ After apply, Terraform prints the Lambda ARN, KMS key ARN/ID, audit table ARN, a
 
 ## Caller authorization
 
-Terraform creates an invoker IAM policy named `${function_name}-invoker` that allows `lambda:InvokeFunction` on only the GoBless Lambda ARN. Attach that policy to the IAM roles or users that are authorized to request certificates. GoBless still validates requested certificate principals against `allowed_principals` and its IAM principal-binding policy.
+This module intentionally does not create a caller invoker policy or public endpoint. The current GoBless Lambda entrypoint expects an API Gateway proxy event and derives trusted caller identity from API Gateway request context populated by AWS_IAM authorization.
 
-## Invoke with the AWS CLI
-
-Example direct invocation payload:
-
-```bash
-aws lambda invoke \
-  --function-name gobless \
-  --payload fileb://request.json \
-  response.json
-cat response.json
-```
-
-The exact request JSON shape depends on the GoBless client/compatibility mode in use. Request-body principals are untrusted; IAM authorizes invocation and GoBless policy authorizes certificate contents.
+Do not attach direct `lambda:InvokeFunction` permissions to normal certificate requesters for this handler. Direct Lambda invoke payloads are caller-controlled and can spoof API Gateway `requestContext`. Put the function behind API Gateway AWS_IAM, or add a separate trusted direct-invoke adapter before granting end-user invocation permissions.

@@ -2,7 +2,7 @@
 
 ## Scope
 
-This model covers GoBless v0.1: direct AWS Lambda invocation, BLESS-compatible user and host SSH certificate issuance, KMS-backed CA signing by default, encrypted PEM fallback, policy evaluation, and audit logging.
+This model covers GoBless v0.1: API Gateway-backed AWS Lambda invocation with AWS_IAM caller identity, BLESS-compatible user and host SSH certificate issuance, KMS-backed CA signing by default, encrypted PEM fallback, policy evaluation, and audit logging.
 
 ## Assets
 

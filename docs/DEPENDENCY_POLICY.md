@@ -59,7 +59,7 @@ AWS SDK imports must be isolated to adapter packages. Core packages must depend 
 - signer interface;
 - audit sink interface;
 - identity provider interface;
-- Lambda invoker interface for CLI code.
+- AWS_IAM-signed API Gateway client interface for CLI code.
 
 Core policy and certificate-builder tests must run without AWS credentials and without network access.
 
