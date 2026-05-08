@@ -90,6 +90,6 @@ These differences are deliberate security decisions, not accidental incompatibil
 ## Known gaps
 
 - Legacy Lambda event aliases may need validation during handler implementation.
-- API Gateway and OIDC flows are not part of v0.1.
+- API Gateway AWS_IAM is the v0.1 production invocation boundary; OIDC flows are not part of v0.1.
 - Ed25519 CA support is deferred.
 - `kmsauth` is out of scope for v0.1.

@@ -7,7 +7,7 @@ For detailed step-by-step runbooks (initial deployment, CA key rotation, inciden
 ## Deployment Steps
 
 1. **Provision backend infrastructure** — run `terraform apply` in `deploy/terraform/` to create the Lambda function, execution role, KMS key, DynamoDB audit table, and logs. This module does **not** create the public caller endpoint.
-2. **Package and upload the binary** — `make build` produces a `bootstrap` binary for `provided.al2023`. Zip it and upload via Terraform or `aws lambda update-function-code`.
+2. **Package and upload the binary** — build `./cmd/gobless` with `-tags production` as a Lambda `bootstrap`, zip it, and upload via Terraform or `aws lambda update-function-code`. See the runbook or Terraform README for copy/paste commands.
 3. **Configure environment variables** — see the table below. At minimum you need `GOBLESS_CA_KMS_KEY_ID` and `GOBLESS_PRINCIPAL_ALLOWED`.
 4. **Expose a trusted caller boundary** — configure API Gateway proxy integration with AWS_IAM authorization, or another adapter that supplies trusted caller identity outside the request body. Do not grant end users direct `lambda:InvokeFunction` access to this handler.
 5. **Verify certificate issuance** — invoke through the trusted integration and confirm a valid SSH certificate is returned (`ssh-keygen -L` passes).

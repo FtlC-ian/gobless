@@ -119,8 +119,8 @@ Threat: Broad IAM permissions allow unintended principals to invoke Lambda, sign
 Mitigations:
 - Deployment docs must require least-privilege roles for invoke, Lambda execution, KMS signing, and audit writes.
 - KMS key policy should restrict signing to the GoBless Lambda execution role.
-- Lambda resource policy should restrict direct invocation to authorized AWS principals.
-- GoBless policy still validates requested certificate contents after IAM invocation succeeds.
+- API Gateway AWS_IAM should restrict certificate requests to authorized AWS principals; direct Lambda invoke should remain operator-only smoke testing unless a trusted direct-invoke adapter is added.
+- GoBless policy still validates requested certificate contents after API Gateway AWS_IAM authorization succeeds.
 
 Residual risk:
 - GoBless cannot fully compensate for an AWS account where administrators grant wildcard invoke or KMS signing permissions.
@@ -130,7 +130,7 @@ Residual risk:
 Threat: Certificate signing time can vary by signer backend, KMS network latency, CA key type, key size, and local cryptographic operation cost. An attacker with reliable timing visibility across many requests might try to fingerprint the configured CA key type or infer operational details from signing latency. KMS signing is especially variable because it is a remote service call, while local comparisons and validation paths must avoid data-dependent comparisons for secrets where applicable.
 
 Mitigations:
-- Lambda cold-start and AWS service latency noise dominates normal end-to-end signing time, making CA key fingerprinting by timing not practically exploitable for the v0.1 direct-invocation model.
+- Lambda cold-start and AWS service latency noise dominates normal end-to-end signing time, making CA key fingerprinting by timing not practically exploitable for the v0.1 API Gateway/Lambda model.
 - Do not expose detailed per-stage timing metrics to callers.
 - Keep secret comparisons and token/fingerprint equality checks constant-time where the compared value is secret or authorization-sensitive.
 - Treat timing metrics in logs and traces as operational metadata and restrict access accordingly.
