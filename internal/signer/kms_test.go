@@ -2,6 +2,7 @@ package signer
 
 import (
 	"context"
+	"crypto"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
@@ -61,12 +62,17 @@ func publicKeyDER(t *testing.T, pub interface{}) []byte {
 	return der
 }
 
-// realSignFunc returns a signFunc that signs the digest with the given private key
-// and returns the raw bytes as KMS would.
+// realRSASignFunc returns a signFunc that signs the digest with the given private key
+// and returns the raw bytes as KMS would. The Message is a pre-hashed SHA-512
+// digest (MessageType=DIGEST), so we sign with crypto.SHA512 to produce the
+// correct PKCS1v15 signature DigestInfo encoding that SSH can verify.
 func realRSASignFunc(t *testing.T, key *rsa.PrivateKey) func(ctx context.Context, in *KMSSignInput) (*KMSSignOutput, error) {
 	t.Helper()
 	return func(ctx context.Context, in *KMSSignInput) (*KMSSignOutput, error) {
-		sig, err := rsa.SignPKCS1v15(rand.Reader, key, 0, in.Message)
+		// KMS receives a pre-hashed digest (MessageType=DIGEST) for
+		// RSASSA_PKCS1_V1_5_SHA_512, so we must pass crypto.SHA512 here so
+		// that the PKCS1v15 DigestInfo header is encoded correctly.
+		sig, err := rsa.SignPKCS1v15(rand.Reader, key, crypto.SHA512, in.Message)
 		if err != nil {
 			return nil, err
 		}
@@ -260,5 +266,146 @@ func TestKMSSigner_SignError_GetPublicKeyFailsOnSign(t *testing.T) {
 	_, err = s.Sign(cert)
 	if err == nil {
 		t.Fatal("expected error from Sign when GetPublicKey fails, got nil")
+	}
+}
+
+// TestKMSSigner_SignRSA_VerifiesCert verifies that an RSA cert signed via the
+// KMS signer path actually passes ssh.CertChecker verification. This is the
+// critical regression test for the rsa-sha2-512 signing bug: it checks that
+// (a) the CA public key parses, (b) the cert signature format is rsa-sha2-512,
+// and (c) the cert verifies against the CA.
+func TestKMSSigner_SignRSA_VerifiesCert(t *testing.T) {
+	// CA key (simulates the KMS key)
+	caKey := generateRSATestKey(t)
+	// User key to be certified
+	userKey := generateRSATestKey(t)
+
+	der := publicKeyDER(t, &caKey.PublicKey)
+	client := &mockKMSClient{
+		getPublicKeyFunc: func(_ context.Context, _ *KMSGetPublicKeyInput) (*KMSGetPublicKeyOutput, error) {
+			return &KMSGetPublicKeyOutput{PublicKeyDER: der, KeySpec: "RSA_2048"}, nil
+		},
+		signFunc: realRSASignFunc(t, caKey),
+	}
+
+	userSSHPub, err := ssh.NewPublicKey(&userKey.PublicKey)
+	if err != nil {
+		t.Fatalf("ssh.NewPublicKey for user key: %v", err)
+	}
+
+	s := NewKMSSigner("test-ca-key-id", client)
+	cert := makeMinimalCert(userSSHPub)
+
+	signed, err := s.Sign(cert)
+	if err != nil {
+		t.Fatalf("Sign: %v", err)
+	}
+	if signed == nil {
+		t.Fatal("Sign returned nil certificate")
+	}
+
+	// Assert the cert uses rsa-sha2-512 (not the deprecated ssh-rsa/SHA1).
+	if signed.Signature == nil {
+		t.Fatal("Signature is nil")
+	}
+	if signed.Signature.Format != ssh.KeyAlgoRSASHA512 {
+		t.Errorf("expected signature format %q, got %q", ssh.KeyAlgoRSASHA512, signed.Signature.Format)
+	}
+
+	// Parse the CA public key and build a cert checker.
+	caPubSSH, err := ssh.NewPublicKey(&caKey.PublicKey)
+	if err != nil {
+		t.Fatalf("ssh.NewPublicKey for CA key: %v", err)
+	}
+	caPubBytes := caPubSSH.Marshal()
+	caPubParsed, err := ssh.ParsePublicKey(caPubBytes)
+	if err != nil {
+		t.Fatalf("ssh.ParsePublicKey CA: %v", err)
+	}
+
+	certChecker := &ssh.CertChecker{
+		IsUserAuthority: func(auth ssh.PublicKey) bool {
+			return auth.Type() == caPubParsed.Type() &&
+				string(auth.Marshal()) == string(caPubParsed.Marshal())
+		},
+	}
+
+	// Round-trip the cert through wire encoding to mimic real SSH handshake parsing.
+	certLine := ssh.MarshalAuthorizedKey(signed)
+	parsedKey, _, _, _, err := ssh.ParseAuthorizedKey(certLine)
+	if err != nil {
+		t.Fatalf("parse signed cert authorized key line: %v", err)
+	}
+	parsedCert, ok := parsedKey.(*ssh.Certificate)
+	if !ok {
+		t.Fatalf("expected *ssh.Certificate after parse, got %T", parsedKey)
+	}
+
+	if err := certChecker.CheckCert("testuser", parsedCert); err != nil {
+		t.Errorf("cert verification failed: %v", err)
+	}
+}
+
+// TestKMSSigner_SignECDSA_VerifiesCert verifies that an ECDSA cert signed via the
+// KMS signer path also passes ssh.CertChecker verification, ensuring the ECDSA
+// path is unaffected by RSA fixes.
+func TestKMSSigner_SignECDSA_VerifiesCert(t *testing.T) {
+	caKey := generateECTestKey(t)
+	userKey := generateECTestKey(t)
+
+	der := publicKeyDER(t, &caKey.PublicKey)
+	client := &mockKMSClient{
+		getPublicKeyFunc: func(_ context.Context, _ *KMSGetPublicKeyInput) (*KMSGetPublicKeyOutput, error) {
+			return &KMSGetPublicKeyOutput{PublicKeyDER: der, KeySpec: "ECC_NIST_P256"}, nil
+		},
+		signFunc: realECSignFunc(t, caKey),
+	}
+
+	userSSHPub, err := ssh.NewPublicKey(&userKey.PublicKey)
+	if err != nil {
+		t.Fatalf("ssh.NewPublicKey for user key: %v", err)
+	}
+
+	s := NewKMSSigner("test-ca-ec-key-id", client)
+	cert := makeMinimalCert(userSSHPub)
+
+	signed, err := s.Sign(cert)
+	if err != nil {
+		t.Fatalf("Sign: %v", err)
+	}
+	if signed == nil {
+		t.Fatal("Sign returned nil certificate")
+	}
+
+	// Build cert checker using ECDSA CA public key.
+	caPubSSH, err := ssh.NewPublicKey(&caKey.PublicKey)
+	if err != nil {
+		t.Fatalf("ssh.NewPublicKey for CA key: %v", err)
+	}
+	caPubBytes := caPubSSH.Marshal()
+	caPubParsed, err := ssh.ParsePublicKey(caPubBytes)
+	if err != nil {
+		t.Fatalf("ssh.ParsePublicKey CA: %v", err)
+	}
+
+	certChecker := &ssh.CertChecker{
+		IsUserAuthority: func(auth ssh.PublicKey) bool {
+			return auth.Type() == caPubParsed.Type() &&
+				string(auth.Marshal()) == string(caPubParsed.Marshal())
+		},
+	}
+
+	certLine := ssh.MarshalAuthorizedKey(signed)
+	parsedKey, _, _, _, err := ssh.ParseAuthorizedKey(certLine)
+	if err != nil {
+		t.Fatalf("parse signed cert: %v", err)
+	}
+	parsedCert, ok := parsedKey.(*ssh.Certificate)
+	if !ok {
+		t.Fatalf("expected *ssh.Certificate, got %T", parsedKey)
+	}
+
+	if err := certChecker.CheckCert("testuser", parsedCert); err != nil {
+		t.Errorf("ECDSA cert verification failed: %v", err)
 	}
 }

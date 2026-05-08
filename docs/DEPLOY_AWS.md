@@ -1,85 +1,31 @@
 # GoBless — AWS Deployment Guide
 
-GoBless can run as an AWS Lambda SSH certificate authority with AWS KMS holding the asymmetric CA signing key and DynamoDB storing audit events.
+GoBless runs as an AWS Lambda function that acts as an SSH certificate authority. The current Lambda entrypoint expects an API Gateway proxy-style event and derives caller identity from API Gateway request context populated by AWS_IAM authorization. It reads configuration from Lambda environment variables, uses AWS KMS for CA signing, and optionally records audit events to DynamoDB.
 
-## Prerequisites
+For detailed step-by-step runbooks (initial deployment, CA key rotation, incident response), see **[docs/RUNBOOKS.md](RUNBOOKS.md)**.
 
-- Terraform 1.5 or newer.
-- AWS credentials for a deployment role or user that can manage Lambda, IAM, KMS, DynamoDB, CloudWatch Logs, and the Terraform state backend.
-- A Terraform S3 backend bucket with versioning, encryption, public access blocking, and native S3 lockfile support enabled via `use_lockfile = true`.
+## Deployment Steps
 
-Do not commit real `terraform.tfvars`, Terraform state, AWS credentials, packaged Lambda zips, or generated `bootstrap` binaries.
+1. **Provision backend infrastructure** — run `terraform apply` in `deploy/terraform/` to create the Lambda function, execution role, KMS key, DynamoDB audit table, and logs. This module does **not** create the public caller endpoint.
+2. **Package and upload the binary** — build `./cmd/gobless` with `-tags production` as a Lambda `bootstrap`, zip it, and upload via Terraform or `aws lambda update-function-code`. See the runbook or Terraform README for copy/paste commands.
+3. **Configure environment variables** — see the table below. At minimum you need `GOBLESS_CA_KMS_KEY_ID` and `GOBLESS_PRINCIPAL_ALLOWED`.
+4. **Expose a trusted caller boundary** — configure API Gateway proxy integration with AWS_IAM authorization, or another adapter that supplies trusted caller identity outside the request body. Do not grant end users direct `lambda:InvokeFunction` access to this handler.
+5. **Verify certificate issuance** — invoke through the trusted integration and confirm a valid SSH certificate is returned (`ssh-keygen -L` passes).
 
-## Package the Lambda
+## Required Environment Variables
 
-From the repository root:
+| Variable | Description | Example |
+|---|---|---|
+| `GOBLESS_CA_KMS_KEY_ID` | KMS key ID or ARN used for CA signing | `alias/gobless-ca` |
+| `GOBLESS_CA_MAX_TTL` | Maximum certificate lifetime in seconds | `3600` |
+| `GOBLESS_CA_DEFAULT_TTL` | Default certificate lifetime in seconds when the request omits TTL | `3600` |
+| `GOBLESS_CA_SIGNER_TYPE` | Signer backend: `kms` (production) or `rsa` (local PEM dev only) | `kms` |
+| `GOBLESS_PRINCIPAL_ALLOWED` | Comma-separated list of allowed SSH principals | `ec2-user,ubuntu` |
+| `GOBLESS_CA_DYNAMODB_TABLE` | DynamoDB table name for audit events (optional) | `gobless-audit` |
+| `GOBLESS_LOGGING_AUDIT_ENABLED` | Enable audit logging (`true`/`false`) | `true` |
+| `GOBLESS_LOGGING_AUDIT_FAIL_OPEN` | Allow signing when audit write fails (`true`/`false`; default `false`) | `false` |
 
-```bash
-mkdir -p build
-GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -tags production -o build/bootstrap ./cmd/gobless
-(cd build && zip gobless.zip bootstrap)
-```
-
-## Configure Terraform
-
-Copy the example backend and edit it for your account, or pass backend settings through your deployment workflow:
-
-```bash
-cp deploy/terraform/backend.tf.example deploy/terraform/backend.tf
-```
-
-Example `terraform.tfvars`:
-
-```hcl
-aws_region          = "us-east-1"
-function_name       = "gobless"
-kms_key_alias       = "gobless-ca"
-dynamodb_table_name = "gobless-audit"
-lambda_zip_path     = "../../build/gobless.zip"
-kms_admin_principal_arns = [
-  "arn:aws:iam::123456789012:role/gobless-deploy",
-]
-
-max_ttl_seconds  = 3600
-audit_fail_open  = false
-allowed_principals = ["alice", "bob"]
-
-# Recommended production hardening.
-allowed_cert_types     = ["user"]
-expected_account_id    = "123456789012"
-enforce_iam_binding    = true
-log_retention_days     = 30
-
-tags = {
-  Project   = "gobless"
-  ManagedBy = "terraform"
-}
-```
-
-Use `enforce_iam_binding = true` only when your AWS caller identity names intentionally match SSH principals. If you invoke through assumed roles or federated sessions, validate the mapping before enabling it.
-
-Use `kms_admin_principal_arns` for short-lived deploy or operator roles that administer the CA key. Avoid long-lived access-key users as KMS administrators.
-
-## Deploy
-
-```bash
-terraform -chdir=deploy/terraform init
-terraform -chdir=deploy/terraform plan -out tfplan
-terraform -chdir=deploy/terraform apply tfplan
-```
-
-Terraform creates:
-
-- Lambda function.
-- KMS RSA-4096 asymmetric signing key and alias.
-- DynamoDB audit table with TTL and point-in-time recovery.
-- CloudWatch log group with configured retention.
-- Lambda execution role.
-- Invoker IAM policy scoped to the Lambda function.
-
-## Caller authorization
-
-Attach the generated invoker policy only to principals that may request SSH certificates. Invocation permission alone is not enough to get a certificate: GoBless also validates certificate type, requested principals, TTL, source address, expected AWS account, and optional IAM identity binding.
+The Terraform module in `deploy/terraform/` provisions the Lambda/KMS/DynamoDB backend environment variables from Terraform variables. It intentionally does not provision an API Gateway endpoint yet. Review `deploy/terraform/variables.tf` for defaults.
 
 ## Environment Variable Overrides
 
@@ -89,14 +35,10 @@ Treat Lambda environment variables as a privileged control surface. Partial acce
 
 Operators should restrict `lambda:UpdateFunctionConfiguration` to a tightly scoped IAM principal, such as a dedicated deployment role used only by CI/CD or approved infrastructure operators. Do not grant this permission to general developer roles, even if those developers are allowed to invoke GoBless or read logs.
 
-The Terraform module in `deploy/terraform` does not grant `lambda:UpdateFunctionConfiguration` to callers. It creates a caller invoker policy for `lambda:InvokeFunction` only, and a Lambda execution role with the KMS, DynamoDB, and CloudWatch Logs permissions needed by the function. Keep configuration update permissions outside that invoker policy and bind them only to your deployment workflow.
+The Terraform IAM module in `deploy/terraform` does not grant `lambda:UpdateFunctionConfiguration` by default. It creates only the Lambda execution role with the KMS, DynamoDB, and CloudWatch Logs permissions needed by the function. Keep configuration update permissions outside caller roles and bind them only to your deployment workflow.
 
-## Tear down
+## Invocation boundary
 
-If this was only a test deployment:
+The production Lambda handler consumes API Gateway proxy-style events. The trusted identity comes from `requestContext.identity.userArn` and `requestContext.accountId`, which API Gateway populates when the method uses AWS_IAM authorization. Request-body identity fields are never trusted.
 
-```bash
-terraform -chdir=deploy/terraform destroy
-```
-
-After destroy, disable or delete any deployment access keys that were created only for this stack. Keep state backups only as long as they are operationally useful.
+Do not attach direct `lambda:InvokeFunction` permissions to normal certificate requesters for this handler. A direct Lambda invocation payload is caller-controlled and can spoof `requestContext`; it is suitable only for tightly controlled operator smoke tests where the payload is not treated as an authorization boundary. Public/user certificate issuance should go through API Gateway AWS_IAM or an equivalent trusted adapter.

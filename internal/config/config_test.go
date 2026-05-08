@@ -39,7 +39,6 @@ func TestLoad(t *testing.T) {
 			name: "valid config from env only",
 			env: map[string]string{
 				"GOBLESS_CA_KMS_KEY_ID":         "alias/gobless-test",
-				"GOBLESS_CA_DYNAMODB_TABLE":     "gobless-audit-test",
 				"GOBLESS_CA_SIGNER_TYPE":        "kms",
 				"GOBLESS_CA_DEFAULT_TTL":        "120",
 				"GOBLESS_CA_MAX_TTL":            "300",
@@ -51,9 +50,6 @@ func TestLoad(t *testing.T) {
 				if cfg.CA.KMSKeyID != "alias/gobless-test" || cfg.CA.SignerType != "kms" {
 					t.Fatalf("unexpected KMS config: %+v", cfg.CA)
 				}
-				if cfg.CA.DynamoDBTable != "gobless-audit-test" {
-					t.Fatalf("DynamoDBTable = %q", cfg.CA.DynamoDBTable)
-				}
 				if cfg.CA.RSAMinKeyBits != 2048 {
 					t.Fatalf("RSAMinKeyBits default = %d", cfg.CA.RSAMinKeyBits)
 				}
@@ -61,18 +57,6 @@ func TestLoad(t *testing.T) {
 					t.Fatal("AuditEnabled = false")
 				}
 			},
-		},
-		{
-			name: "audit enabled with KMS signer requires DynamoDB table",
-			env: map[string]string{
-				"GOBLESS_CA_KMS_KEY_ID":         "alias/gobless-test",
-				"GOBLESS_CA_SIGNER_TYPE":        "kms",
-				"GOBLESS_CA_DEFAULT_TTL":        "120",
-				"GOBLESS_CA_MAX_TTL":            "300",
-				"GOBLESS_LAMBDA_REGION":         "us-east-1",
-				"GOBLESS_LOGGING_AUDIT_ENABLED": "true",
-			},
-			wantErr: "CA.DynamoDBTable is required",
 		},
 		{
 			name: "env overrides file value",

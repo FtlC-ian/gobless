@@ -3,7 +3,9 @@
   "description": "Caller requests a principal that does not match the IAM identity username.",
   "request": {
     "cert_type": "user",
-    "principals": ["alice"],
+    "principals": [
+      "alice"
+    ],
     "ttl_seconds": 3600,
     "public_key": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAITestFixtureOnly user@example"
   },
@@ -19,6 +21,15 @@
   "expected": {
     "decision": "deny",
     "reason": "principal_identity_mismatch",
-    "no_leak_assertions": ["-----BEGIN", "aws_secret", "panic", "goroutine "]
+    "no_leak_assertions": [
+      "-----BEGIN",
+      "aws_secret",
+      "panic",
+      "goroutine ",
+      "AWS_SESSION_TOKEN",
+      "x-amz-security-token",
+      "runtime error",
+      "AWS_SECRET_ACCESS_KEY"
+    ]
   }
 }

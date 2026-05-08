@@ -37,17 +37,19 @@ type fixtureRequest struct {
 }
 
 type fixtureExpected struct {
-	Decision string `json:"decision"`
-	Reason   string `json:"reason"`
+	Decision         string   `json:"decision"`
+	Reason           string   `json:"reason"`
+	NoLeakAssertions []string `json:"no_leak_assertions"`
 }
 
 type fixture struct {
-	Name        string            `json:"name"`
-	Description string            `json:"description"`
-	Request     fixtureRequest    `json:"request"`
-	IAMContext  fixtureIAMContext `json:"iam_context"`
-	Policy      fixturePolicy     `json:"policy"`
-	Expected    fixtureExpected   `json:"expected"`
+	Name                 string            `json:"name"`
+	Description          string            `json:"description"`
+	Request              fixtureRequest    `json:"request"`
+	IAMContext           fixtureIAMContext `json:"iam_context"`
+	Policy               fixturePolicy     `json:"policy"`
+	ExpectedDenialReason string            `json:"expected_denial_reason"`
+	Expected             fixtureExpected   `json:"expected"`
 }
 
 // buildConfig builds a config.Config from fixture policy and expected reason.
@@ -71,7 +73,7 @@ func buildConfig(f *fixture) *config.Config {
 	}
 
 	// Enable IAM binding for identity-mismatch cases.
-	if f.Expected.Reason == "principal_identity_mismatch" {
+	if f.Expected.Reason == "principal_identity_mismatch" || f.ExpectedDenialReason == "principal_identity_mismatch" {
 		cfg.Principal.EnforceIAMBinding = true
 	}
 
@@ -89,11 +91,16 @@ func buildRequest(f *fixture) *policy.Request {
 	if f.Request.CriticalOptions != nil {
 		sourceAddr = f.Request.CriticalOptions["source-address"]
 	}
+	publicKey := f.Request.PublicKey
+	if strings.Contains(publicKey, "TestFixtureOnly") {
+		publicKey = testED25519PubKey
+	}
+
 	return &policy.Request{
 		IAMCallerARN:        f.IAMContext.ARN,
 		IAMAccountID:        f.IAMContext.AccountID,
 		IAMUsername:         f.IAMContext.Username,
-		PublicKey:           f.Request.PublicKey,
+		PublicKey:           publicKey,
 		CertType:            f.Request.CertType,
 		RequestedPrincipals: f.Request.Principals,
 		TTLSeconds:          f.Request.TTLSeconds,
@@ -134,7 +141,50 @@ func TestNegativeFixtures(t *testing.T) {
 			if dec.Approved {
 				t.Errorf("fixture %q: expected denial but got approval (KeyID=%q)", f.Name, dec.KeyID)
 			}
+
+			wantReason := f.ExpectedDenialReason
+			if strings.Contains(wantReason, "_") {
+				wantReason = reasonLabelSubstring(wantReason)
+			}
+			if wantReason == "" {
+				wantReason = reasonLabelSubstring(f.Expected.Reason)
+			}
+			if wantReason != "" && !strings.Contains(dec.DenialReason, wantReason) {
+				t.Errorf("fixture %q: denial reason %q does not contain %q", f.Name, dec.DenialReason, wantReason)
+			}
+			for _, forbidden := range f.Expected.NoLeakAssertions {
+				if strings.Contains(dec.DenialReason, forbidden) {
+					t.Errorf("fixture %q: denial reason leaked forbidden substring %q", f.Name, forbidden)
+				}
+			}
 		})
+	}
+}
+
+func reasonLabelSubstring(label string) string {
+	switch label {
+	case "invalid_source_address":
+		return "invalid source address"
+	case "privileged_principal_not_allowed":
+		return "privileged principal"
+	case "empty_principals", "missing_principals":
+		return "principals"
+	case "ttl_not_positive":
+		return "TTL must be positive"
+	case "ttl_exceeds_max":
+		return "TTL exceeds maximum"
+	case "principal_identity_mismatch":
+		return "principal does not match IAM identity"
+	case "iam_account_mismatch", "iam_partial_match":
+		return "IAM account mismatch"
+	case "invalid_principal", "confusable_principal":
+		return "invalid principal"
+	case "duplicate_principal":
+		return "duplicate principal"
+	case "cert_type_not_allowed":
+		return "certificate type not allowed"
+	default:
+		return strings.ReplaceAll(label, "_", " ")
 	}
 }
 
@@ -303,6 +353,153 @@ func TestMaxTTLBoundary_MaxTTLPlusOne_Denied(t *testing.T) {
 	}
 	if dec.Approved {
 		t.Error("expected denial when TTL exceeds MaxTTL by 1")
+	}
+}
+
+func expectDeniedPrincipal(t *testing.T, principal string, wantReason string) {
+	t.Helper()
+	cfg := baseConfig()
+	req := &policy.Request{
+		IAMCallerARN:        "arn:aws:iam::111122223333:user/alice",
+		IAMAccountID:        "111122223333",
+		IAMUsername:         "alice",
+		PublicKey:           testED25519PubKey,
+		CertType:            "user",
+		RequestedPrincipals: []string{principal},
+		TTLSeconds:          3600,
+	}
+
+	dec, err := policy.Evaluate(context.Background(), req, cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if dec.Approved {
+		t.Fatalf("expected denial for principal %q", principal)
+	}
+	if dec.DenialReason != wantReason {
+		t.Fatalf("DenialReason = %q, want %q", dec.DenialReason, wantReason)
+	}
+}
+
+func TestPrincipalControlCharactersDenied(t *testing.T) {
+	tests := []struct {
+		name      string
+		principal string
+	}{
+		{name: "newline", principal: "alice\nroot"},
+		{name: "carriage return", principal: "alice\rroot"},
+		{name: "null byte", principal: "alice\x00root"},
+		{name: "tab", principal: "alice\troot"},
+	}
+
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			expectDeniedPrincipal(t, tc.principal, "invalid principal")
+		})
+	}
+}
+
+func TestDuplicatePrincipalsDenied(t *testing.T) {
+	tests := []struct {
+		name       string
+		principals []string
+	}{
+		{name: "exact duplicate", principals: []string{"alice", "alice"}},
+		{name: "case-insensitive duplicate", principals: []string{"Alice", "alice"}},
+	}
+
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := baseConfig()
+			req := &policy.Request{
+				IAMCallerARN:        "arn:aws:iam::111122223333:user/alice",
+				IAMAccountID:        "111122223333",
+				IAMUsername:         "alice",
+				PublicKey:           testED25519PubKey,
+				CertType:            "user",
+				RequestedPrincipals: tc.principals,
+				TTLSeconds:          3600,
+			}
+
+			dec, err := policy.Evaluate(context.Background(), req, cfg)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if dec.Approved {
+				t.Fatalf("expected duplicate principals %q to be denied", tc.principals)
+			}
+			if dec.DenialReason != "duplicate principal" {
+				t.Fatalf("DenialReason = %q, want duplicate principal", dec.DenialReason)
+			}
+		})
+	}
+}
+
+func TestEmptyPrincipalAmongValidPrincipalsDenied(t *testing.T) {
+	cfg := baseConfig()
+	req := &policy.Request{
+		IAMCallerARN:        "arn:aws:iam::111122223333:user/alice",
+		IAMAccountID:        "111122223333",
+		IAMUsername:         "alice",
+		PublicKey:           testED25519PubKey,
+		CertType:            "user",
+		RequestedPrincipals: []string{"alice", ""},
+		TTLSeconds:          3600,
+	}
+
+	dec, err := policy.Evaluate(context.Background(), req, cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if dec.Approved {
+		t.Fatal("expected empty principal among valid principals to be denied")
+	}
+	if dec.DenialReason != "invalid principal" {
+		t.Fatalf("DenialReason = %q, want invalid principal", dec.DenialReason)
+	}
+}
+
+func TestUnicodeHomoglyphPrincipalsDenied(t *testing.T) {
+	tests := []struct {
+		name      string
+		principal string
+	}{
+		{name: "root with Greek omicron", principal: "rοοt"},
+		{name: "admin with Greek omicron", principal: "admοn"},
+		{name: "admin with fullwidth latin a", principal: "ａdmin"},
+		{name: "root with mathematical bold o", principal: "r𝐨𝐨t"},
+		{name: "admin with Cyrillic dze", principal: "aԁmin"},
+	}
+
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			expectDeniedPrincipal(t, tc.principal, "invalid principal")
+		})
+	}
+}
+
+func TestWhitespaceOnlyPrincipalDenied(t *testing.T) {
+	for _, principal := range []string{" ", "\t", "\n", "\r\n", " \t \n "} {
+		principal := principal
+		t.Run(strings.ReplaceAll(principal, "\n", `\n`), func(t *testing.T) {
+			expectDeniedPrincipal(t, principal, "invalid principal")
+		})
+	}
+}
+
+func TestOverlyLongPrincipalDenied(t *testing.T) {
+	expectDeniedPrincipal(t, strings.Repeat("a", 1001), "invalid principal")
+}
+
+func TestEncodedNullBytePrincipalsDenied(t *testing.T) {
+	for _, principal := range []string{"alice%00root", `alice\u0000root`} {
+		principal := principal
+		t.Run(principal, func(t *testing.T) {
+			expectDeniedPrincipal(t, principal, "invalid principal")
+		})
 	}
 }
 

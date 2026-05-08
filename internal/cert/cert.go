@@ -81,9 +81,22 @@ func Sign(ctx context.Context, req *Request, s signer.Signer) (*Response, error)
 	}
 
 	// Build extensions map.
-	exts := req.Extensions
-	if exts == nil {
+	// Host certs must have NO extensions (BLESS compatible); user certs default to
+	// the standard five permit-* extensions when none are explicitly provided.
+	//
+	// Enforce at the cert layer: host certs always get zero extensions, regardless
+	// of what the caller passes. Non-empty Extensions on a host cert request is a
+	// misconfiguration/caller error; silently enforcing correct behavior is safer
+	// and more operator-friendly than returning an error.
+	var exts map[string]string
+	if req.CertType == HostCert {
+		// OpenSSH spec and BLESS compatibility both require host certs to carry no
+		// extensions. Ignore any caller-supplied value unconditionally.
+		exts = map[string]string{}
+	} else if req.Extensions == nil {
 		exts = copyMap(defaultExtensions)
+	} else {
+		exts = req.Extensions
 	}
 
 	// Sort extensions keys to produce lexicographic ordering in the cert wire format.

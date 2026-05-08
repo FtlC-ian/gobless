@@ -19,7 +19,7 @@ Approved does not mean unrestricted. Each import must still be necessary for the
 
 ## New dependency review gate
 
-Any dependency not listed above requires explicit merge request justification containing:
+Any dependency not listed above requires explicit pull request justification containing:
 
 1. Package name and exact module path.
 2. Feature requiring it.
@@ -30,11 +30,11 @@ Any dependency not listed above requires explicit merge request justification co
 7. Maintainer stability assessment: release cadence, ownership, bus factor, and compatibility practices.
 8. Removal plan if the dependency becomes unmaintained or security-problematic.
 
-Security-adjacent dependencies require reviewer approval and Hawk security review before merge.
+Security-adjacent dependencies require reviewer approval and security review before merge.
 
 ## Banned without explicit approval
 
-The following are banned unless a future ADR or MR security review grants a narrow exception:
+The following are banned unless a future ADR or PR security review grants a narrow exception:
 
 - Web frameworks.
 - Config frameworks.
@@ -59,30 +59,30 @@ AWS SDK imports must be isolated to adapter packages. Core packages must depend 
 - signer interface;
 - audit sink interface;
 - identity provider interface;
-- Lambda invoker interface for CLI code.
+- AWS_IAM-signed API Gateway client interface for CLI code.
 
 Core policy and certificate-builder tests must run without AWS credentials and without network access.
 
 ## Inventory and enforcement
 
-Every MR that adds or changes Go modules must include dependency inventory output. Until CI exists, reviewers should run:
+Every PR that adds or changes Go modules must include reviewer-visible dependency justification. Run:
+
+```sh
+make deps
+```
+
+`make deps` runs `go mod verify`, `go mod tidy`, and fails if `go.mod` or `go.sum` would change. The GitHub CI `deps` job runs the same target, so dependency drift should be fixed before review.
+
+For manual inventory review, use:
 
 ```sh
 go list -m all
 ```
 
-When CI/Makefile support is added, the repository should provide a stable command such as:
-
-```sh
-go list -m all > dependency-inventory.txt
-```
-
-CI should fail if `go.mod` or `go.sum` changes without reviewer-visible dependency justification.
-
 ## Reviewer checklist item
 
-Every MR reviewer must answer:
+Every PR reviewer must answer:
 
-> Does this MR add or expand non-standard-library dependencies? If yes, is each dependency approved in `docs/DEPENDENCY_POLICY.md` or justified with security and maintainer review?
+> Does this PR add or expand non-standard-library dependencies? If yes, is each dependency approved in `docs/DEPENDENCY_POLICY.md` or justified with security and maintainer review?
 
-If the answer is unclear, the MR must not merge.
+If the answer is unclear, the PR must not merge.

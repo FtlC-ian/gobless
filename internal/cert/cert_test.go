@@ -5,6 +5,9 @@ package cert
 import (
 	"bytes"
 	"context"
+	"crypto/ecdsa"
+	"crypto/ed25519"
+	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
@@ -59,6 +62,31 @@ func testPublicKey(t *testing.T) ssh.PublicKey {
 		t.Fatalf("parse test pub key: %v", err)
 	}
 	return pub
+}
+
+// testSSHSigner wraps an ssh.Signer to satisfy signer.Signer in tests.
+type testSSHSigner struct {
+	signer ssh.Signer
+}
+
+func (s testSSHSigner) Sign(cert *ssh.Certificate) (*ssh.Certificate, error) {
+	if err := cert.SignCert(rand.Reader, s.signer); err != nil {
+		return nil, err
+	}
+	return cert, nil
+}
+
+func (s testSSHSigner) PublicKey() ssh.PublicKey {
+	return s.signer.PublicKey()
+}
+
+func newTestSSHSigner(t *testing.T, key any) signer.Signer {
+	t.Helper()
+	sshSigner, err := ssh.NewSignerFromKey(key)
+	if err != nil {
+		t.Fatalf("ssh.NewSignerFromKey: %v", err)
+	}
+	return testSSHSigner{signer: sshSigner}
 }
 
 // smallRSAPublicKey generates a small (1024-bit) RSA key for rejection tests.
@@ -628,7 +656,7 @@ func TestTestKeyPEMValid(t *testing.T) {
 	}
 }
 
-// TestSign_SourceAddressCIDRValidation covers issue #47: CIDR validation before cert signing.
+// TestSign_SourceAddressCIDRValidation covers CIDR validation before cert signing.
 func TestSign_SourceAddressCIDRValidation(t *testing.T) {
 	s := testSigner(t)
 	pub := testPublicKey(t)
@@ -726,8 +754,8 @@ func TestSign_SourceAddressCIDRValidation(t *testing.T) {
 	}
 }
 
-// TestGenerateKeyID_SanitizesAllDangerousChars covers issue #48:
-// KeyID sanitization must handle newlines, tabs, carriage returns, null bytes, and Unicode.
+// TestGenerateKeyID_SanitizesAllDangerousChars verifies that KeyID sanitization
+// handles newlines, tabs, carriage returns, null bytes, and Unicode.
 func TestGenerateKeyID_SanitizesAllDangerousChars(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -791,12 +819,133 @@ func TestGenerateKeyID_SanitizesAllDangerousChars(t *testing.T) {
 	}
 }
 
-// Unused import prevention (bytes used in future)
-var _ = bytes.Compare
-
 // TestGenerateKeyID_OutputIsPrintableASCII asserts that GenerateKeyID returns
 // a string consisting entirely of printable, non-whitespace ASCII characters
 // even when the principal contains control characters or non-ASCII bytes.
+
+func TestSign_ECDSAP256PublicKeyParses(t *testing.T) {
+	ca := testSigner(t)
+	clientKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatalf("generate ECDSA P-256 key: %v", err)
+	}
+	pub, err := ssh.NewPublicKey(&clientKey.PublicKey)
+	if err != nil {
+		t.Fatalf("ssh.NewPublicKey: %v", err)
+	}
+
+	resp, err := Sign(context.Background(), &Request{
+		CertType:   UserCert,
+		PublicKey:  pub,
+		Principals: []string{"alice"},
+		TTL:        time.Hour,
+	}, ca)
+	if err != nil {
+		t.Fatalf("Sign: %v", err)
+	}
+	parsed, _, _, _, err := ssh.ParseAuthorizedKey([]byte(resp.AuthorizedKey))
+	if err != nil {
+		t.Fatalf("parse signed ECDSA cert: %v", err)
+	}
+	cert, ok := parsed.(*ssh.Certificate)
+	if !ok {
+		t.Fatalf("parsed key type %T, want *ssh.Certificate", parsed)
+	}
+	if cert.CertType != ssh.UserCert {
+		t.Fatalf("CertType = %d, want user cert", cert.CertType)
+	}
+	if !bytes.Equal(cert.Key.Marshal(), pub.Marshal()) {
+		t.Error("cert embedded public key does not match input key")
+	}
+}
+
+func TestSign_Ed25519PublicKeyParses(t *testing.T) {
+	ca := testSigner(t)
+	pubKey, _, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("generate Ed25519 key: %v", err)
+	}
+	pub, err := ssh.NewPublicKey(pubKey)
+	if err != nil {
+		t.Fatalf("ssh.NewPublicKey: %v", err)
+	}
+
+	resp, err := Sign(context.Background(), &Request{
+		CertType:   UserCert,
+		PublicKey:  pub,
+		Principals: []string{"alice"},
+		TTL:        time.Hour,
+	}, ca)
+	if err != nil {
+		t.Fatalf("Sign: %v", err)
+	}
+	parsed, _, _, _, err := ssh.ParseAuthorizedKey([]byte(resp.AuthorizedKey))
+	if err != nil {
+		t.Fatalf("parse signed Ed25519 cert: %v", err)
+	}
+	cert, ok := parsed.(*ssh.Certificate)
+	if !ok {
+		t.Fatalf("parsed key type %T, want *ssh.Certificate", parsed)
+	}
+	if cert.CertType != ssh.UserCert {
+		t.Fatalf("CertType = %d, want user cert", cert.CertType)
+	}
+	if !bytes.Equal(cert.Key.Marshal(), pub.Marshal()) {
+		t.Error("cert embedded public key does not match input key")
+	}
+}
+
+func TestSign_ECDSAP256CASignerParses(t *testing.T) {
+	caKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatalf("generate ECDSA P-256 CA key: %v", err)
+	}
+	resp, err := Sign(context.Background(), &Request{
+		CertType:   HostCert,
+		PublicKey:  testPublicKey(t),
+		Principals: []string{"host.example.internal"},
+		TTL:        time.Hour,
+		Extensions: map[string]string{},
+	}, newTestSSHSigner(t, caKey))
+	if err != nil {
+		t.Fatalf("Sign: %v", err)
+	}
+	parsed, _, _, _, err := ssh.ParseAuthorizedKey([]byte(resp.AuthorizedKey))
+	if err != nil {
+		t.Fatalf("parse ECDSA-CA signed cert: %v", err)
+	}
+	cert, ok := parsed.(*ssh.Certificate)
+	if !ok {
+		t.Fatalf("parsed key type %T, want *ssh.Certificate", parsed)
+	}
+	if cert.CertType != ssh.HostCert {
+		t.Fatalf("CertType = %d, want host cert", cert.CertType)
+	}
+}
+
+func TestSign_Ed25519CASignerParses(t *testing.T) {
+	_, caKey, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("generate Ed25519 CA key: %v", err)
+	}
+	resp, err := Sign(context.Background(), &Request{
+		CertType:   UserCert,
+		PublicKey:  testPublicKey(t),
+		Principals: []string{"alice"},
+		TTL:        time.Hour,
+	}, newTestSSHSigner(t, caKey))
+	if err != nil {
+		t.Fatalf("Sign: %v", err)
+	}
+	parsed, _, _, _, err := ssh.ParseAuthorizedKey([]byte(resp.AuthorizedKey))
+	if err != nil {
+		t.Fatalf("parse Ed25519-CA signed cert: %v", err)
+	}
+	if _, ok := parsed.(*ssh.Certificate); !ok {
+		t.Fatalf("parsed key type %T, want *ssh.Certificate", parsed)
+	}
+}
+
 func TestGenerateKeyID_OutputIsPrintableASCII(t *testing.T) {
 	trickyPrincipals := []struct {
 		name      string

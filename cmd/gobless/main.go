@@ -13,19 +13,12 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"log"
 	"os"
 
-	"github.com/FtlC-ian/gobless/internal/audit"
 	gobconfig "github.com/FtlC-ian/gobless/internal/config"
 	gobless "github.com/FtlC-ian/gobless/internal/lambda"
-	"github.com/FtlC-ian/gobless/internal/signer"
-	"github.com/aws/aws-sdk-go-v2/aws"
-	awsconfig "github.com/aws/aws-sdk-go-v2/config"
-	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
-	"github.com/aws/aws-sdk-go-v2/service/kms"
 )
 
 const usageText = `gobless — SSH certificate authority service
@@ -71,33 +64,9 @@ func runLambda() {
 		log.Fatalf("gobless: load config: %v", err)
 	}
 
-	awsCfg, err := awsconfig.LoadDefaultConfig(context.Background(), awsconfig.WithRegion(cfg.Lambda.Region))
-	if err != nil {
-		log.Fatalf("gobless: load AWS config: %v", err)
-	}
-
-	s := mustSigner(cfg, awsCfg)
-	auditRepo := mustAuditRepo(cfg, awsCfg)
+	s := mustSigner(cfg)
+	auditRepo := mustAuditRepo(cfg)
 
 	handler := gobless.NewHandler(cfg, s, auditRepo)
 	handler.Start()
-}
-
-// mustSigner returns the configured Lambda certificate signer or fatals.
-func mustSigner(cfg *gobconfig.Config, awsCfg aws.Config) signer.Signer {
-	switch cfg.CA.SignerType {
-	case "kms":
-		return signer.NewKMSSigner(cfg.CA.KMSKeyID, signer.NewAWSKMSClient(kms.NewFromConfig(awsCfg)))
-	default:
-		log.Fatalf("gobless: unsupported Lambda signer type %q", cfg.CA.SignerType)
-		return nil // unreachable
-	}
-}
-
-// mustAuditRepo returns an audit.Repository or fatals.
-func mustAuditRepo(cfg *gobconfig.Config, awsCfg aws.Config) audit.Repository {
-	if !cfg.Logging.AuditEnabled {
-		return &audit.NoopRepository{}
-	}
-	return audit.NewDynamoRepository(cfg.CA.DynamoDBTable, dynamodb.NewFromConfig(awsCfg), cfg.Logging.AuditFailOpen)
 }

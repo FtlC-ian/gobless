@@ -15,12 +15,6 @@ variable "kms_key_alias" {
   type        = string
 }
 
-variable "kms_admin_principal_arns" {
-  description = "Additional IAM principal ARNs allowed to administer the GoBless KMS key. Prefer short-lived operator or CI deploy roles, not long-lived access-key users. Account root remains in the policy to avoid key lockout."
-  type        = list(string)
-  default     = []
-}
-
 variable "dynamodb_table_name" {
   description = "DynamoDB table name for audit events."
   type        = string
@@ -39,28 +33,16 @@ variable "max_ttl_seconds" {
   default     = 3600
 }
 
+variable "default_ttl_seconds" {
+  description = "Default certificate TTL when the signing request does not specify one, in seconds."
+  type        = number
+  default     = 3600
+}
+
 variable "allowed_principals" {
-  description = "Principal allowlist enforced by GoBless policy. Set this explicitly for production. When empty, GoBless still denies well-known privileged principals but otherwise behaves like a permissive demo configuration."
+  description = "Principal allowlist enforced by GoBless policy."
   type        = list(string)
   default     = []
-}
-
-variable "enforce_iam_binding" {
-  description = "If true, requested principals must match the invoking IAM identity. Recommended for production when caller identities map directly to SSH principals."
-  type        = bool
-  default     = false
-}
-
-variable "expected_account_id" {
-  description = "Expected AWS account ID for invocations. Leave empty to disable account pinning."
-  type        = string
-  default     = ""
-}
-
-variable "allowed_cert_types" {
-  description = "Certificate types GoBless may issue. Production defaults to user certs only."
-  type        = list(string)
-  default     = ["user"]
 }
 
 variable "log_retention_days" {

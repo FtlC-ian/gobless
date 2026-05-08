@@ -28,7 +28,10 @@
       "aws_secret",
       "AWS_SECRET_ACCESS_KEY",
       "panic",
-      "goroutine "
+      "goroutine ",
+      "AWS_SESSION_TOKEN",
+      "x-amz-security-token",
+      "runtime error"
     ]
   }
 }
