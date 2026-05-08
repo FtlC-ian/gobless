@@ -32,9 +32,6 @@ Create a `terraform.tfvars` file or pass variables on the command line. `kms_key
 ```hcl
 kms_key_alias      = "gobless-ca"
 allowed_principals = ["alice", "bob"]
-kms_admin_principal_arns = [
-  "arn:aws:iam::123456789012:role/gobless-deploy",
-]
 tags = {
   Project = "gobless"
 }
@@ -47,18 +44,8 @@ Useful defaults:
 - `dynamodb_table_name`: `gobless-audit`
 - `audit_fail_open`: `false`
 - `max_ttl_seconds`: `3600`
-- `allowed_cert_types`: `["user"]`
-- `enforce_iam_binding`: `false`
-- `expected_account_id`: `""`
-- `kms_admin_principal_arns`: `[]`
 - `reserved_concurrent_executions`: `10`
 - `log_retention_days`: `30`
-
-## Remote state
-
-For shared deployments, configure a remote backend before running `apply`. Copy `backend.tf.example` to `backend.tf` and edit the bucket and region for your AWS account, or pass backend settings through your deployment workflow. The backend file is intentionally ignored so account-specific state locations are not committed.
-
-Use an S3 bucket with versioning, server-side encryption, public access blocking, and native S3 lockfile locking (`use_lockfile = true`). Do not commit local `terraform.tfstate` or `terraform.tfvars` files.
 
 ## Deploy
 
@@ -73,13 +60,7 @@ After apply, Terraform prints the Lambda ARN, KMS key ARN/ID, audit table ARN, a
 
 ## Caller authorization
 
-Terraform creates an invoker IAM policy named `${function_name}-invoker` that allows `lambda:InvokeFunction` on only the GoBless Lambda ARN. Attach that policy to the IAM roles or users that are authorized to request certificates. GoBless still validates requested certificate principals against `allowed_principals`, `allowed_cert_types`, optional `expected_account_id`, and optional IAM principal-binding policy.
-
-## Operational hardening notes
-
-- Use `kms_admin_principal_arns` for short-lived deploy/operator roles that administer the KMS key. Avoid broad standing KMS admin grants on long-lived access-key users.
-- Lambda log retention is managed by Terraform. The deploy principal needs scoped CloudWatch Logs permissions for `/aws/lambda/${function_name}`.
-- Keep `backend.tf` and `terraform.tfvars` account-local and out of version control.
+Terraform creates an invoker IAM policy named `${function_name}-invoker` that allows `lambda:InvokeFunction` on only the GoBless Lambda ARN. Attach that policy to the IAM roles or users that are authorized to request certificates. GoBless still validates requested certificate principals against `allowed_principals` and its IAM principal-binding policy.
 
 ## Invoke with the AWS CLI
 

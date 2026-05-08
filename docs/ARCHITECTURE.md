@@ -6,17 +6,17 @@ GoBless is a Go implementation of a BLESS-compatible serverless SSH certificate 
 
 ```mermaid
 flowchart LR
-    subgraph Caller[Trust boundary: caller workstation or automation]
+    subgraph Caller[Caller workstation or automation]
         CLI[CLI client]
         PUB[SSH public key]
     end
 
-    subgraph AWSInvoke[Trust boundary: AWS IAM invocation]
+    subgraph AWSInvoke[AWS IAM invocation layer]
         IAM[AWS IAM / STS identity]
         LAMBDA[Lambda handler]
     end
 
-    subgraph GoBless[Trust boundary: GoBless process]
+    subgraph GoBless[GoBless process]
         CFG[Config loader]
         POL[Policy engine]
         CERT[Certificate builder]
@@ -24,7 +24,7 @@ flowchart LR
         SIGN[Signer interface]
     end
 
-    subgraph Custody[Trust boundary: CA key custody]
+    subgraph Custody[CA key custody]
         KMS[AWS KMS asymmetric key]
         PEM[Encrypted PEM fallback]
     end
@@ -42,96 +42,55 @@ flowchart LR
     LAMBDA -->|OpenSSH certificate or typed error| CLI
 ```
 
-## Components and responsibilities
+## Components
 
 ### Signer interface
 
-The signer interface is the only component allowed to perform CA signing. Implementations must expose signing and public-key export without exposing private key material.
+The signer is the only component allowed to perform CA signing. Implementations expose signing and public-key export without revealing private key material. The interface hides KMS and PEM details and returns typed errors that exclude key material, request secrets, and provider internals.
 
-Responsibilities:
-- Sign certificate wire data using the configured CA key.
-- Export the CA public key in OpenSSH-authorized-key format.
-- Hide KMS and PEM details behind a small internal interface.
-- Return typed errors that do not include key material, plaintext request bodies containing secrets, or provider-specific sensitive metadata.
-
-Default implementation: AWS KMS asymmetric signing. Encrypted PEM is an explicit fallback for development, migration, or deployments that cannot use KMS.
+The default implementation uses AWS KMS asymmetric signing. Encrypted PEM is available as an explicit fallback for development, migration, or deployments that cannot use KMS.
 
 ### Certificate builder
 
-The certificate builder converts a validated signing request into an `ssh.Certificate`.
+The certificate builder converts a validated signing request into an `ssh.Certificate`. It parses and validates the submitted SSH public key, builds user and host certificates with approved principals, extensions, critical options, TTL, serial, and key ID, and enforces OpenSSH wire-format constraints.
 
-Responsibilities:
-- Parse and validate the submitted SSH public key.
-- Build user and host certificates with approved principals, extensions, critical options, TTL, valid-after, valid-before, serial, and key ID.
-- Enforce OpenSSH wire-format constraints and deterministic field mapping.
-- Generate random 64-bit serials and KeyIDs containing timestamp plus random suffix for audit correlation.
-
-The builder does not decide whether a principal is allowed; it only consumes policy-approved inputs.
+The builder does not decide whether a principal is allowed — it only consumes policy-approved inputs.
 
 ### Policy engine
 
-The policy engine is the authorization decision point.
+The policy engine is the authorization decision point. It treats all request-body fields as untrusted and binds IAM caller identity to requested user principals by default. It validates principals against allowlist policy, enforces maximum TTL, allowed critical options, allowed extensions, source-address and force-command restrictions, and rejects malformed, ambiguous, Unicode-confusable, or duplicate principals.
 
-Responsibilities:
-- Treat all request-body fields as untrusted.
-- Bind IAM caller identity to requested user principals by default.
-- Validate requested principals against allowlist policy.
-- Validate host certificate authorization separately from user certificate authorization.
-- Enforce maximum TTL, allowed critical options, allowed extensions, source-address restrictions, force-command restrictions, and explicit override rules.
-- Reject malformed, ambiguous, Unicode-confusable, or duplicate principals.
+Host certificate authorization is separate from user certificate authorization.
 
 ### Lambda handler
 
-The Lambda handler is the request/response adapter.
+The Lambda handler is the request/response adapter. It receives direct Lambda invocation events, extracts trusted AWS caller identity from invocation context, decodes request JSON, and calls config, policy, certificate builder, signer, and audit in order. It returns BLESS-compatible success responses and stable, non-secret error responses.
 
-Responsibilities:
-- Receive direct Lambda invocation events compatible with BLESS-style clients.
-- Extract trusted AWS caller identity from invocation context or configured identity metadata.
-- Decode request JSON into internal request types.
-- Call config, policy, certificate builder, signer, and audit components in order.
-- Return BLESS-compatible success responses and stable, non-secret error responses.
-
-The handler must not make authorization decisions inline except for syntactic request rejection before policy evaluation.
+The handler does not make authorization decisions inline — anything beyond syntactic request rejection goes through policy.
 
 ### Config
 
-Config defines compatibility behavior and deployment policy.
-
-Responsibilities:
-- Load BLESS-compatible configuration keys and GoBless-native equivalents.
-- Validate required keys at startup/init, including CA mode, allowed principals, TTL ceilings, allowed critical options, audit backend, and compatibility flags.
-- Fail closed when config is missing, ambiguous, or allows unsafe production behavior without an explicit opt-in.
-- Surface production warnings for encrypted PEM mode.
+Config defines compatibility behavior and deployment policy. It loads BLESS-compatible configuration keys and GoBless-native equivalents, validates required keys at startup (CA mode, allowed principals, TTL ceilings, allowed critical options, audit backend, compatibility flags), and fails closed when config is missing, ambiguous, or allows unsafe production behavior without an explicit opt-in. PEM mode surfaces a production warning.
 
 ### Audit
 
-Audit records every certificate decision, successful or rejected.
+Audit records every certificate decision, successful or rejected. It emits structured events containing request ID, AWS caller identity, certificate type, public-key fingerprint, requested principals, approved principals, TTL, KeyID, serial, source address, decision, and reason code. Secrets, private key material, and raw request payloads are never logged.
 
-Responsibilities:
-- Emit structured audit events containing request ID, AWS caller identity, certificate type, public-key fingerprint, requested principals, approved principals, TTL, KeyID, serial, source address, decision, reason code, and signer backend.
-- Redact secrets and avoid logging private key material, decrypted PEM, credentials, or complete request payloads that might contain secrets.
-- Make audit failures explicit. Production policy should fail closed unless configured otherwise for a documented emergency mode.
+Audit failures are explicit. Production policy fails closed unless an emergency mode is explicitly configured.
 
 ### CLI client
 
-The CLI client is the user-facing request tool.
-
-Responsibilities:
-- Read or generate the SSH public key to certify.
-- Discover caller identity through AWS credentials used to invoke Lambda.
-- Submit BLESS-compatible request shapes for user and host certificates.
-- Print returned OpenSSH certificates and CA public keys.
-- Avoid storing secrets or certificates longer than needed.
+The CLI client is the user-facing request tool. It reads or generates the SSH public key, discovers caller identity through AWS credentials, submits BLESS-compatible request shapes, and prints returned certificates and CA public keys.
 
 ## Trust boundaries
 
-| Boundary | Trusted inside | Untrusted outside | Security rule |
+| Boundary | What's trusted inside | What's untrusted | Rule |
 | --- | --- | --- | --- |
-| Caller workstation | User keypair, local CLI arguments | Local shell environment, filesystem, request body | Server must validate every requested principal and option. |
+| Caller workstation | User keypair, local CLI arguments | Local shell environment, filesystem, request body | Server validates every requested principal and option. |
 | AWS IAM invocation | AWS-authenticated principal and invocation authorization | Request JSON fields claiming usernames, hosts, TTL, IPs | IAM allows invocation; policy authorizes certificate contents. |
 | GoBless process | Internal validated request objects | Lambda event payload and environment strings before validation | Decode, validate, and normalize before use. |
-| CA key custody | KMS private key or decrypted PEM during signing | Lambda logs, audit events, request/response data | Private key must never be serialized or logged; prefer KMS. |
-| Audit backend | Append-only audit records and backend IAM controls | Caller-controlled request content | Audit must record decisions with redacted, normalized fields. |
+| CA key custody | KMS private key or decrypted PEM during signing | Lambda logs, audit events, request/response data | Private key is never serialized or logged; prefer KMS. |
+| Audit backend | Append-only audit records and backend IAM controls | Caller-controlled request content | Audit records decisions with redacted, normalized fields. |
 
 ## Dependency tree
 

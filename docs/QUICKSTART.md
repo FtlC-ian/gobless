@@ -2,18 +2,16 @@
 
 ## Prerequisites
 
-- Go 1.22+
+- Go version matching `go.mod` (currently Go 1.25+)
 - `make`
 - Git
 
 ## Setup
 
 ```bash
-git clone https://github.com/your-org/gobless.git
+git clone https://github.com/FtlC-ian/gobless.git
 cd gobless
 ```
-
-Replace `your-org` with the GitHub owner for your fork or release repository.
 
 ## Run CI Checks Locally
 
@@ -30,9 +28,9 @@ make vet          # Static analysis
 make test         # Unit tests
 make test-race    # Race detector
 make build        # Compile all packages
-make deps         # Print module dependency graph
+make deps         # Verify modules and go.mod/go.sum tidiness
 ```
 
 ## First Test Pass
 
-After cloning, `make ci` should pass cleanly with zero errors. If it doesn't, check your Go version (`go version` — must be 1.22+) and that dependencies are fetched (`go mod download`).
+After cloning, `make ci` should pass cleanly with zero errors. If it doesn't, check your Go version (`go version` — must match `go.mod`, currently 1.25+) and that dependencies are fetched (`go mod download`).

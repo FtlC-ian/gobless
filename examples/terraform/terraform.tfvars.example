@@ -1,0 +1,66 @@
+# ============================================================
+# EXAMPLE ONLY — NOT FOR PRODUCTION
+# Copy this file to terraform.tfvars and replace ALL values
+# with your real configuration before running terraform apply.
+# ============================================================
+
+# -----------------------------------------------------------------
+# AWS region to deploy GoBless into.
+# -----------------------------------------------------------------
+aws_region = "us-east-1"
+
+# -----------------------------------------------------------------
+# Lambda function name.
+# -----------------------------------------------------------------
+function_name = "gobless"
+
+# -----------------------------------------------------------------
+# KMS key alias for the CA signing key (without the alias/ prefix).
+# -----------------------------------------------------------------
+kms_key_alias = "gobless-ca-example-replace-me"
+
+# -----------------------------------------------------------------
+# DynamoDB table name for audit events.
+# -----------------------------------------------------------------
+dynamodb_table_name = "gobless-audit"
+
+# -----------------------------------------------------------------
+# Audit fail-open: if true, signing proceeds when audit writes fail.
+# SECURITY: Set to false in production.
+# -----------------------------------------------------------------
+audit_fail_open = false
+
+# -----------------------------------------------------------------
+# Maximum certificate TTL accepted by GoBless, in seconds.
+# -----------------------------------------------------------------
+max_ttl_seconds = 3600
+
+# -----------------------------------------------------------------
+# Allowed principals — usernames GoBless will issue certs for.
+# Must match the Unix usernames on your target SSH servers.
+# -----------------------------------------------------------------
+allowed_principals = ["alice", "bob", "carol", "deploy-bot"]
+
+# -----------------------------------------------------------------
+# CloudWatch Logs retention for the Lambda log group (days).
+# -----------------------------------------------------------------
+log_retention_days = 30
+
+# -----------------------------------------------------------------
+# Path to the packaged GoBless Lambda zip file.
+# -----------------------------------------------------------------
+lambda_zip_path = "build/gobless.zip"
+
+# -----------------------------------------------------------------
+# Reserved concurrency for the GoBless Lambda function.
+# -----------------------------------------------------------------
+reserved_concurrent_executions = 10
+
+# -----------------------------------------------------------------
+# Tags applied to all created resources.
+# -----------------------------------------------------------------
+tags = {
+  Environment = "example"
+  ManagedBy   = "terraform"
+  Project     = "gobless"
+}

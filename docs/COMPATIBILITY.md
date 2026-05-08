@@ -1,6 +1,6 @@
 # GoBless BLESS Compatibility
 
-GoBless targets near drop-in compatibility with Netflix BLESS for direct AWS Lambda invocation and OpenSSH certificate output. Compatibility means existing BLESS operators should be able to determine whether a migration requires no change, config-only change, or client/code change.
+GoBless targets BLESS-compatible behavior for direct AWS Lambda invocation and OpenSSH certificate output. Compatibility means existing BLESS operators should be able to determine whether a migration requires no change, config-only change, or client/code change.
 
 ## Feature matrix
 
@@ -53,25 +53,23 @@ Error responses must be stable and non-secret. They should identify request clas
 
 ## Config mapping
 
-Exact parser names may be refined during #5, but the mapping below is the compatibility target.
+The mapping below shows the current GoBless configuration surfaces. INI-style keys are loaded from config files; `GOBLESS_*` environment variables override them in Lambda deployments.
 
 | BLESS config key / concept | GoBless equivalent | Notes |
 | --- | --- | --- |
-| Lambda function name / region | `lambda.function_name`, `aws.region` | Used by CLI and deployment docs. |
-| CA private key path or blob | `signer.pem.encrypted_key` | Explicit fallback only; production warning required. |
-| CA private key passphrase source | `signer.pem.passphrase_secret` | Must resolve from protected secret source, not logs or source code. |
-| KMS key ID / alias | `signer.kms.key_id` | Preferred production mode. |
-| CA public key export path | `ca.public_key_output` or export operation | Public key only; never private key. |
-| Allowed IAM users/roles | `policy.callers` | Trusted invocation identities eligible for policy evaluation. |
-| Username to AWS identity mapping | `policy.user_principal_bindings` | Required when AWS username/ARN differs from Unix username. |
-| Remote user / requested principal | `request.principals` after policy approval | Body value is untrusted until validated. |
-| Bastion or source address rules | `policy.source_addresses` | Request value is caller-supplied and must be validated against policy; Lambda does not network-enforce it. |
-| Force command rules | `policy.force_commands` | Disabled unless explicitly allowed. |
-| Certificate lifetime / TTL | `policy.max_ttl` and request `ttl` | Request cannot exceed policy maximum. |
-| User certificate toggle | `policy.user_certs.enabled` | Enabled for v0.1. |
-| Host certificate toggle | `policy.host_certs.enabled` | Enabled only with separate host policy. |
-| Audit table / sink | `audit.backend`, `audit.table` | DynamoDB or configured backend in later implementation. |
-| Logging verbosity | `log.level` | Standard-library logging conventions; no logging framework. |
+| Lambda function region | `[Lambda] region` / `GOBLESS_LAMBDA_REGION` or `AWS_REGION` | Used by production Lambda/KMS wiring. |
+| CA private key path or blob | `[CA] private_key_file` / `[CA] private_key_b64` | Local/dev or explicit PEM fallback only; production should use KMS. |
+| CA private key passphrase | `[CA] encrypted_password` | Must come from protected config, not source code or logs. |
+| KMS key ID / alias | `[CA] kms_key_id` / `GOBLESS_CA_KMS_KEY_ID` | Preferred production signer. |
+| Signer backend | `[CA] signer_type` / `GOBLESS_CA_SIGNER_TYPE` | `kms` for production, `rsa`/PEM paths for local development. |
+| Remote user / requested principal | request `principals` after policy approval | Body value is untrusted until validated. |
+| Allowed principals | `[Principal] allowed` / `GOBLESS_PRINCIPAL_ALLOWED` | Comma-separated policy-approved SSH principals. |
+| IAM account binding | `[Principal] expected_account_id`, `[Principal] enforce_iam_binding` | Binds caller identity to requested user principals. |
+| Source-address rules | request `source_address` plus policy validation | Caller supplied; Lambda does not network-enforce it. |
+| Certificate lifetime / TTL | `[CA] max_ttl`, `[CA] default_ttl`; request `ttl_seconds` | Request cannot exceed policy maximum. |
+| User/host certificate toggle | `[Principal] allowed_cert_types` | Restricts certificate classes when needed. |
+| Audit table | `[CA] dynamodb_table` / `GOBLESS_CA_DYNAMODB_TABLE` | Used when audit logging is enabled. |
+| Audit behavior | `[Logging] audit_enabled`, `[Logging] audit_fail_open` | Fail-closed by default; fail-open is an emergency mode. |
 
 ## Intentional behavior differences
 
@@ -90,9 +88,7 @@ These differences are deliberate security decisions, not accidental incompatibil
 
 ## Known gaps
 
-- Fixture files under `testdata/bless/` still need to be created by implementation/test issues using public BLESS examples or reconstructed equivalents.
-- Exact legacy Lambda event aliases must be confirmed during handler implementation (#7).
-- Exact BLESS config key spelling must be validated during config implementation (#5).
+- Legacy Lambda event aliases may need validation during handler implementation.
 - API Gateway and OIDC flows are not part of v0.1.
 - Ed25519 CA support is deferred.
 - `kmsauth` is out of scope for v0.1.

@@ -1,0 +1,25 @@
+# ============================================================
+# EXAMPLE ONLY — NOT FOR PRODUCTION
+# This is what `terraform output` looks like after a successful
+# GoBless deployment. All ARNs and IDs are fake/placeholder.
+# ============================================================
+
+$ terraform output
+
+ca_key_arn = "arn:aws:kms:us-east-1:123456789012:key/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+
+ca_public_key = <<EOT
+ecdsa-sha2-nistp256 AAAAE2VjZHNhLXNoYTItbmlzdHAyNTYAAAAIbmlzdHAyNTYAAABBBExamplePublicKeyDataHereNotRealDoNotTrustOrCopyThisIntoAnySshAuthorizedKeysOrKnownHostsFile= gobless-ca@example
+EOT
+
+lambda_function_arn = "arn:aws:lambda:us-east-1:123456789012:function:gobless-example"
+
+lambda_function_name = "gobless-example"
+
+lambda_invoke_url = "https://xxxxxxxxxx.execute-api.us-east-1.amazonaws.com/prod/sign"
+
+audit_table_name = "gobless-audit-example"
+
+audit_table_arn = "arn:aws:dynamodb:us-east-1:123456789012:table/gobless-audit-example"
+
+iam_role_arn = "arn:aws:iam::123456789012:role/gobless-example-lambda-role"

@@ -1,0 +1,6 @@
+{
+  "_comment": "EXAMPLE ONLY — Intentionally invalid request to demonstrate GoBless error response shape.",
+  "_purpose": "This request is missing cert_type and principals, which are required fields. GoBless returns a Denied or InternalError response.",
+  "public_key": "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCbwssYu068UeOTimqwErWv71t00TaDNKxneD30UMr4ADo/j/kIJB+MAespnHPcJaqr+N3/eZXexbvl1eNs+OcggZK4HHbCHpvss0AR/ExjEDdibvOAylBYoyT/jOkOpBKq+RbJuQxQPC77ucHFx2jxRDl+7nmpx1+fAm7BVYYeyJ+7kjCBGngX1IzIaQKwWc5il1UpSfmrjyGgjz8ljsCIYBNI+kWUjbiGXn9vLiJ4jnB2Em07DV5USH2O/gMNOFR+9HhSKnWUfv4kLy6hrKypuWzGJTPkYjVlSBmifmbDcy1eKO4Xvnq0Og9x63k5TNwxzhZZkvPxhzXRYfUah68x example-only@gobless",
+  "ttl_seconds": 3600
+}

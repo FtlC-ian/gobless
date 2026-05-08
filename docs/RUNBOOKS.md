@@ -6,7 +6,7 @@ These runbooks are copy/paste-oriented starting points for operators. Adjust nam
 
 ### Prerequisites
 
-- Go 1.22 or newer.
+- Go version matching `go.mod` (currently Go 1.25 or newer).
 - Terraform 1.5 or newer.
 - AWS CLI v2 configured for the target account and region.
 - AWS permissions to create Lambda, IAM, KMS, DynamoDB, and CloudWatch Logs resources.
@@ -27,51 +27,44 @@ Expected: `build/gobless.zip` exists and contains a Lambda bootstrap binary. If 
 
 ### Configure Terraform
 
-Configure a remote backend before applying shared infrastructure. Either copy `deploy/terraform/backend.tf.example` to ignored `deploy/terraform/backend.tf` and edit it for your AWS account, or pass backend settings through your deployment workflow.
-
-Create an ignored local `terraform.tfvars` file or pass these values through CI/CD secrets:
-
 ```bash
 cd deploy/terraform
 cat > terraform.tfvars <<'EOF'
-aws_region          = "us-east-1"
-function_name       = "gobless"
-kms_key_alias       = "gobless-ca"
-allowed_principals  = ["alice", "bob"]
-lambda_zip_path     = "../../build/gobless.zip"
-allowed_cert_types  = ["user"]
-expected_account_id = "123456789012"
-enforce_iam_binding = true
-kms_admin_principal_arns = [
-  "arn:aws:iam::123456789012:role/gobless-deploy",
-]
+aws_region         = "us-east-1"
+function_name      = "gobless"
+kms_key_alias      = "gobless-ca"
+allowed_principals = ["alice", "bob"]
+lambda_zip_path    = "../../build/gobless.zip"
 tags = {
   Project = "gobless"
 }
 EOF
 ```
 
-Do not commit `terraform.tfvars`, `backend.tf`, Terraform state, or Terraform plan files.
-
 ### Deploy
 
 ```bash
 terraform init
-terraform plan -out tfplan
-terraform apply tfplan
+terraform apply
 ```
 
-Expected: Terraform reports resources created or changed. Stop if the plan deletes an existing production KMS key, DynamoDB audit table, or Lambda function unexpectedly.
+Expected: Terraform asks for approval, then reports resources created or changed. Stop if the plan deletes an existing production KMS key, DynamoDB audit table, or Lambda function unexpectedly.
 
-Review the saved plan before applying. After apply, note the Lambda function name, KMS key ID, and DynamoDB audit table name from Terraform outputs or the AWS console. Delete `tfplan` after use if it contains environment-specific data.
+Review the plan before approving. After apply, note the Lambda function name, KMS key ID, and DynamoDB audit table name from Terraform outputs or the AWS console.
 
 ### Verify Lambda invocation
 
-Create a minimal request payload for your configured client/compatibility mode, then invoke the function. The exact JSON shape depends on the GoBless client mode in use; this example is a placeholder to verify Lambda reachability and error handling:
+Create a request payload and invoke the function to confirm IAM access and Lambda startup are working:
 
 ```bash
 cat > /tmp/gobless-request.json <<'EOF'
-{}
+{
+  "public_key": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIN6lhLmBMxwSXiMkEFoFxMeSu0ZHwgMSrMREJVtEXAMPLE alice@workstation",
+  "cert_type": "user",
+  "principals": ["alice"],
+  "ttl_seconds": 3600,
+  "source_address": "203.0.113.42/32"
+}
 EOF
 
 aws lambda invoke \
@@ -94,8 +87,7 @@ Rotation is not automatic for asymmetric KMS keys. Plan a distribution window be
 
    ```bash
    cd deploy/terraform
-   terraform plan -out tfplan -var 'kms_key_alias=gobless-ca-2026-q2'
-   terraform apply tfplan
+   terraform apply -var 'kms_key_alias=gobless-ca-2026-q2'
    ```
 
    Expected: Terraform creates or selects the replacement CA key and updates the Lambda configuration. Stop if the plan removes the old key before the deprecation window is complete.
@@ -147,8 +139,7 @@ Treat a compromised CA key as an emergency. SSH user certificates do not have a 
 
    ```bash
    cd deploy/terraform
-   terraform plan -out tfplan -var 'kms_key_alias=gobless-ca-recovery'
-   terraform apply tfplan
+   terraform apply -var 'kms_key_alias=gobless-ca-recovery'
    ```
 
 3. Replace `TrustedUserCAKeys` on every host so it contains only the new CA public key. Do not leave the compromised CA public key trusted:

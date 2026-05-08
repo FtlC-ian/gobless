@@ -1,0 +1,38 @@
+# EXAMPLE ONLY — NOT FOR PRODUCTION
+# This shows what `ssh-keygen -L -f issued-cert.pub` output looks like
+# for a GoBless-issued user certificate.
+# Annotations are inline with (←) markers.
+
+/path/to/alice-cert.pub:
+        Type: ssh-rsa-cert-v01@openssh.com user certificate   (← "user certificate" for user certs; "host certificate" for host certs)
+        Public key: RSA-CERT SHA256:b3f4TyiZb4/X9a8T8Uvf5kbP8GVBpca3gbYxkYG1cyA   (← fingerprint of the USER's public key, not the CA)
+        Signing CA: ECDSA SHA256:ExAmPlEcAfInGeRpRiNtGoEsHeRe (using ecdsa-sha2-nistp256)   (← fingerprint of your GoBless KMS CA — verify this matches!)
+        Key ID: "gobless-user-alice-1746500000-a1b2c3d4"   (← format: gobless-<cert-type>-<principal>-<unix-timestamp>-<hex8>)
+        Serial: 9823741650234891234   (← random non-zero uint64 generated per issuance; useful for audit/revocation)
+        Valid: from 2026-05-06T00:00:00 to 2026-05-06T01:00:00   (← 1-hour validity window for user certs)
+        Principals:
+                alice   (← the Unix username this cert is valid for; must match /etc/ssh/AuthorizedPrincipalsFile)
+        Critical Options:
+                source-address 10.0.1.0/24   (← cert is ONLY usable from this CIDR range; omitted if source_address not set in request)
+        Extensions:
+                permit-agent-forwarding   (← allows SSH agent forwarding)
+                permit-port-forwarding   (← allows TCP port forwarding)
+                permit-pty   (← allows terminal allocation)
+                permit-user-rc   (← allows ~/.ssh/rc execution)
+                permit-X11-forwarding   (← allows X11 forwarding)
+
+# ---------------------------------------------------------------
+# HOST certificate example (for comparison):
+# ---------------------------------------------------------------
+
+/path/to/web-01-host-cert.pub:
+        Type: ssh-rsa-cert-v01@openssh.com host certificate   (← "host certificate")
+        Public key: RSA-CERT SHA256:ExAmPlEhOsTkEyFiNgErPrInT
+        Signing CA: ECDSA SHA256:ExAmPlEcAfInGeRpRiNtGoEsHeRe (using ecdsa-sha2-nistp256)   (← same CA as user certs)
+        Key ID: "gobless-host-web-01.example-internal.example.com-1746500000-e5f6a7b8"   (← format: gobless-host-<principal>-<unix-timestamp>-<hex8>)
+        Serial: 4451823609172345678   (← random non-zero uint64)
+        Valid: from 2026-05-06T00:00:00 to 2026-05-07T00:00:00   (← 24-hour validity for host certs)
+        Principals:
+                web-01.example-internal.example.com   (← hostname this cert is valid for)
+        Critical Options: (none)
+        Extensions: (none)   (← host certs carry no extensions)

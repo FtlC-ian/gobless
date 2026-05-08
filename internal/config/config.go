@@ -20,10 +20,10 @@ type Config struct {
 		PrivateKeyB64  string
 		// KMS key ID for asymmetric signing mode
 		KMSKeyID string
-		// DynamoDB table for audit events
-		DynamoDBTable string
 		// Encrypted password for PEM key (KMS-encrypted, base64)
 		EncryptedPassword string
+		// DynamoDB table name for audit logging
+		DynamoDBTable string
 		// Key type: "rsa" or "kms" — determines which signer is used
 		SignerType string
 		// Default cert TTL in seconds
@@ -176,9 +176,6 @@ func validate(cfg *Config) error {
 		errs = append(errs, "CA.DefaultTTL must be > 0")
 	} else if cfg.CA.MaxTTL > 0 && cfg.CA.DefaultTTL > cfg.CA.MaxTTL {
 		errs = append(errs, "CA.DefaultTTL must be <= CA.MaxTTL")
-	}
-	if cfg.Logging.AuditEnabled && cfg.CA.SignerType == "kms" && cfg.CA.DynamoDBTable == "" {
-		errs = append(errs, "CA.DynamoDBTable is required when audit logging is enabled with the KMS signer")
 	}
 	if cfg.Logging.Level != "" {
 		switch cfg.Logging.Level {

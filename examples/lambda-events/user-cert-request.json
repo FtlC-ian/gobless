@@ -1,0 +1,9 @@
+{
+  "_comment": "EXAMPLE ONLY — NOT FOR PRODUCTION. Sample user certificate request sent to GoBless Lambda.",
+  "public_key": "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCbwssYu068UeOTimqwErWv71t00TaDNKxneD30UMr4ADo/j/kIJB+MAespnHPcJaqr+N3/eZXexbvl1eNs+OcggZK4HHbCHpvss0AR/ExjEDdibvOAylBYoyT/jOkOpBKq+RbJuQxQPC77ucHFx2jxRDl+7nmpx1+fAm7BVYYeyJ+7kjCBGngX1IzIaQKwWc5il1UpSfmrjyGgjz8ljsCIYBNI+kWUjbiGXn9vLiJ4jnB2Em07DV5USH2O/gMNOFR+9HhSKnWUfv4kLy6hrKypuWzGJTPkYjVlSBmifmbDcy1eKO4Xvnq0Og9x63k5TNwxzhZZkvPxhzXRYfUah68x example-only@gobless",
+  "_public_key_note": "EXAMPLE KEY — DO NOT USE IN PRODUCTION. Generated as a throwaway for this example only.",
+  "cert_type": "user",
+  "principals": ["alice"],
+  "ttl_seconds": 3600,
+  "source_address": "10.0.1.0/24"
+}

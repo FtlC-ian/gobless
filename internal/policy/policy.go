@@ -52,8 +52,8 @@ type Decision struct {
 	KeyID         string
 }
 
-// validPrincipalRE matches only safe principal characters.
-var validPrincipalRE = regexp.MustCompile(`^[a-zA-Z0-9._@-]+$`)
+// validPrincipalRE matches only safe principal characters and caps each principal at 255 bytes.
+var validPrincipalRE = regexp.MustCompile(`^[a-zA-Z0-9._@-]{1,255}$`)
 
 // privilegedPrincipals lists well-known system/cloud accounts that must not be granted without an explicit allowlist.
 var privilegedPrincipals = map[string]bool{

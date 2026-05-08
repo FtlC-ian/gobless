@@ -13,24 +13,6 @@ data "aws_iam_policy_document" "kms_key" {
     resources = ["*"]
   }
 
-  dynamic "statement" {
-    for_each = length(var.kms_admin_principal_arns) > 0 ? [1] : []
-
-    content {
-      sid    = "AllowConfiguredKeyAdministrators"
-      effect = "Allow"
-
-      principals {
-        type        = "AWS"
-        identifiers = var.kms_admin_principal_arns
-      }
-
-      actions = ["kms:*"]
-
-      resources = ["*"]
-    }
-  }
-
   statement {
     sid    = "AllowLambdaSigningOnly"
     effect = "Allow"

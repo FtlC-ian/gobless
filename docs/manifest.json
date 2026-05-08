@@ -1,0 +1,200 @@
+{
+  "docs": [
+    {
+      "path": "README.md",
+      "title": "GoBless",
+      "description": "Project overview: what GoBless is, how it relates to Netflix BLESS, and high-level feature summary.",
+      "tags": ["overview", "introduction"]
+    },
+    {
+      "path": "docs/ARCHITECTURE.md",
+      "title": "GoBless Architecture",
+      "description": "System architecture: Lambda invocation flow, IAM authentication, policy evaluation, and certificate signing pipeline.",
+      "tags": ["architecture", "design"]
+    },
+    {
+      "path": "docs/THREAT_MODEL.md",
+      "title": "GoBless Threat Model",
+      "description": "Assets, attackers, mitigations, and residual risks for the CA signing service.",
+      "tags": ["security", "threat-model"]
+    },
+    {
+      "path": "docs/COMPATIBILITY.md",
+      "title": "GoBless BLESS Compatibility",
+      "description": "Compatibility contract with Netflix BLESS: what is identical, what differs intentionally, and migration guidance.",
+      "tags": ["compatibility", "migration"]
+    },
+    {
+      "path": "docs/BLESS_COMPATIBILITY.md",
+      "title": "BLESS Compatibility",
+      "description": "Detailed per-feature compatibility matrix comparing GoBless behaviour to the original Netflix BLESS implementation.",
+      "tags": ["compatibility", "migration"]
+    },
+    {
+      "path": "docs/DEPENDENCY_POLICY.md",
+      "title": "GoBless Dependency Policy",
+      "description": "Rules for selecting, vetting, and updating third-party dependencies in this security-sensitive project.",
+      "tags": ["security", "dependencies", "policy"]
+    },
+    {
+      "path": "docs/QUICKSTART.md",
+      "title": "GoBless — Local Development Quickstart",
+      "description": "Step-by-step guide from fresh clone to passing tests, including prerequisites and common troubleshooting.",
+      "tags": ["development", "onboarding"]
+    },
+    {
+      "path": "docs/RUNBOOKS.md",
+      "title": "GoBless Runbooks",
+      "description": "Copy/paste-safe operational runbooks: deployment, CA key rotation, incident response, audit queries, and troubleshooting.",
+      "tags": ["operations", "deployment", "runbook"]
+    },
+    {
+      "path": "docs/DEPLOY_AWS.md",
+      "title": "GoBless AWS Deployment Guide",
+      "description": "AWS deployment guide: IAM roles, KMS key setup, Lambda packaging, environment variable configuration, and security considerations.",
+      "tags": ["deployment", "aws", "operations"]
+    },
+    {
+      "path": "docs/ROADMAP.md",
+      "title": "GoBless v0.1 Roadmap",
+      "description": "Development roadmap tracking phase completion for GoBless v0.1, including all core, policy, security, and documentation phases.",
+      "tags": ["roadmap", "planning"]
+    },
+    {
+      "path": "docs/RELEASE_CHECKLIST.md",
+      "title": "GoBless Release Checklist",
+      "description": "Step-by-step release checklist covering CI gates, docs quality gate, e2e smoke tests, tagging, and post-release tasks.",
+      "tags": ["release", "operations", "checklist"]
+    },
+    {
+      "path": "docs/TEST_MATRIX.md",
+      "title": "GoBless Test Matrix",
+      "description": "Coverage matrix mapping test suites to components, including unit, race, fuzz, and e2e categories.",
+      "tags": ["testing", "quality"]
+    },
+    {
+      "path": "docs/TEST_STRATEGY.md",
+      "title": "GoBless Test Strategy",
+      "description": "Testing philosophy and strategy: unit test scope, fuzz targets, e2e approach, and coverage goals.",
+      "tags": ["testing", "quality"]
+    },
+    {
+      "path": "docs/INDEX.md",
+      "title": "GoBless Documentation Index",
+      "description": "Navigational index linking to all documentation files with one-line summaries.",
+      "tags": ["index", "navigation"]
+    },
+    {
+      "path": "docs/adr/001-key-custody.md",
+      "title": "ADR 001: CA Key Custody",
+      "description": "Architecture decision record for how the CA private key is stored and accessed (AWS KMS).",
+      "tags": ["adr", "security", "key-management"]
+    },
+    {
+      "path": "docs/adr/002-iam-authorization.md",
+      "title": "ADR 002: IAM Authorization and Principal Binding",
+      "description": "Architecture decision record for using AWS IAM as the authentication and authorization layer.",
+      "tags": ["adr", "security", "iam"]
+    },
+    {
+      "path": "docs/adr/003-serial-generation.md",
+      "title": "ADR 003: Certificate Serial Generation and Audit Correlation",
+      "description": "Architecture decision record for certificate serial number generation strategy and audit log correlation.",
+      "tags": ["adr", "certificates", "audit"]
+    },
+    {
+      "path": "docs/adr/004-source-address.md",
+      "title": "ADR 004: Source-Address Derivation and RSA Key-Size Floor",
+      "description": "Architecture decision record for source-address inclusion in certificates and minimum RSA key size enforcement.",
+      "tags": ["adr", "certificates", "security"]
+    }
+  ],
+  "test_commands": [
+    {
+      "command": "make test",
+      "purpose": "Run unit tests for all packages",
+      "when_to_run": "always",
+      "expected_runtime_seconds": 5,
+      "destructive": false
+    },
+    {
+      "command": "make test-race",
+      "purpose": "Run unit tests with the Go race detector enabled",
+      "when_to_run": "pre-merge",
+      "expected_runtime_seconds": 10,
+      "destructive": false
+    },
+    {
+      "command": "make vet",
+      "purpose": "Run go vet static analysis on all packages",
+      "when_to_run": "always",
+      "expected_runtime_seconds": 2,
+      "destructive": false
+    },
+    {
+      "command": "make deps",
+      "purpose": "Verify module graph and ensure go.mod/go.sum are tidy and committed",
+      "when_to_run": "pre-merge",
+      "expected_runtime_seconds": 3,
+      "destructive": false
+    },
+    {
+      "command": "make fuzz",
+      "purpose": "Run fuzz targets (10s each) against policy, cert signing, config loading, and log redaction",
+      "when_to_run": "manual",
+      "expected_runtime_seconds": 40,
+      "destructive": false
+    },
+    {
+      "command": "go test -tags e2e ./test/e2e/",
+      "purpose": "End-to-end smoke test against a real AWS target environment",
+      "when_to_run": "pre-release",
+      "expected_runtime_seconds": 30,
+      "destructive": false
+    }
+  ],
+  "deployment_steps": [
+    {
+      "step": "generate_ca_key_in_kms",
+      "description": "Create a new asymmetric signing key in AWS KMS (ECC_NIST_P256 or RSA_4096) that will serve as the CA private key. Record the key ARN.",
+      "destructive": false,
+      "requires_aws": true,
+      "rollback": "Delete or disable the KMS key if provisioning fails before any certificates are issued."
+    },
+    {
+      "step": "deploy_terraform",
+      "description": "Run `terraform apply` in the deploy/terraform/ directory to provision the Lambda function, IAM roles, and KMS key policies.",
+      "destructive": false,
+      "requires_aws": true,
+      "rollback": "Run `terraform destroy` or revert to the previous Terraform state snapshot."
+    },
+    {
+      "step": "configure_lambda_env",
+      "description": "Set Lambda environment variables: GOBLESS_CA_KMS_KEY_ID, GOBLESS_CA_MAX_TTL, GOBLESS_PRINCIPAL_ALLOWED, and any policy overrides documented in RUNBOOKS.md.",
+      "destructive": false,
+      "requires_aws": true,
+      "rollback": "Restore previous environment variable values via the AWS console or CLI."
+    },
+    {
+      "step": "verify_cert_issuance",
+      "description": "Invoke the Lambda function with a test signing request and verify a valid SSH certificate is returned and passes `ssh-keygen -L` inspection.",
+      "destructive": false,
+      "requires_aws": true,
+      "rollback": null
+    },
+    {
+      "step": "rotate_ca_key",
+      "description": "Create a new KMS key, update the Lambda environment variable (GOBLESS_CA_KMS_KEY_ID), re-verify cert issuance, then schedule deletion of the old KMS key after the maximum certificate validity window expires.",
+      "destructive": false,
+      "requires_aws": true,
+      "rollback": "Revert the Lambda GOBLESS_CA_KMS_KEY_ID environment variable to the previous key ARN."
+    },
+    {
+      "step": "revoke_compromised_ca",
+      "description": "If the CA key is compromised: immediately disable the KMS key, update Lambda to refuse signing (set a deny policy), notify all users to re-authenticate with fresh certificates, and follow the incident runbook in RUNBOOKS.md.",
+      "destructive": true,
+      "requires_aws": true,
+      "rollback": "Restore service only after a new CA key is generated and verified (see rotate_ca_key step)."
+    }
+  ]
+}

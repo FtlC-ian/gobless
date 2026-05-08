@@ -1,6 +1,8 @@
 # GoBless
 
-GoBless is a Go-based, near drop-in replacement for [Netflix BLESS](https://github.com/Netflix/bless) — a serverless SSH certificate authority that signs short-lived SSH certificates on behalf of authenticated users, enforcing configurable policy before each signing operation.
+GoBless is a Go-based, BLESS-compatible SSH certificate authority for standard serverless signing flows. It signs short-lived SSH certificates on behalf of authenticated users and enforces configurable policy before each signing operation.
+
+> **Status:** Local signing, certificate operations, and Lambda/KMS deployment paths are implemented and tested. Operators must still provide AWS credentials, Terraform variables, KMS configuration, and principal policy for their environment; see [docs/DEPLOY_AWS.md](docs/DEPLOY_AWS.md) and [docs/RUNBOOKS.md](docs/RUNBOOKS.md).
 
 ## Architecture
 
@@ -11,23 +13,21 @@ GoBless runs as an AWS Lambda function. A client submits a signing request conta
 See [docs/QUICKSTART.md](docs/QUICKSTART.md) for the full local development flow.
 
 ```bash
-git clone https://github.com/your-org/gobless.git
+git clone https://github.com/FtlC-ian/gobless.git
 cd gobless
 make ci   # vet + test + test-race
 ```
 
-Replace `your-org` with the GitHub owner for your fork or release repository.
-
 ## BLESS Compatibility
 
 GoBless targets functional compatibility with Netflix BLESS for standard SSH certificate signing flows. It is not a line-for-line port; configuration format and internal structure differ.
+
+## Contributing
+
+When fixing a blocking security finding, add a regression case under `testdata/regression/` per the process in [testdata/regression/README.md](testdata/regression/README.md). This keeps the fix verified and prevents regressions from being reintroduced.
 
 ## Documentation
 
 See [docs/INDEX.md](docs/INDEX.md) for all documentation.
 
 For Lambda deployments, `GOBLESS_*` environment variables override configuration-file values at runtime. Treat `lambda:UpdateFunctionConfiguration` as privileged deployment access, not general developer access; see [docs/DEPLOY_AWS.md](docs/DEPLOY_AWS.md#environment-variable-overrides).
-
-## License
-
-MIT. See [LICENSE](LICENSE).

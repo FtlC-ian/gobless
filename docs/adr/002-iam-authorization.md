@@ -21,6 +21,8 @@ For user certificates, the caller AWS username/ARN mapping must match the reques
 
 Assumed-role session names are currently used only as the derived default username; they are not separately enforced beyond normal caller ARN and principal policy checks. In effect, if policy allows an assumed-role ARN or role mapping broadly, any STS session that can assume that allowed role can request certificates permitted for that role/session-derived username. If a deployment needs to restrict which session names may invoke GoBless, enforce that in IAM rather than in request-body policy: add Lambda resource-policy or identity-policy conditions using AWS condition keys such as `aws:userid`, `aws:PrincipalArn`, principal tags, or organization-specific STS session controls.
 
+`sts:RoleSessionName` restrictions belong in the role trust policy and are enforced by IAM during `sts:AssumeRole`, before GoBless is ever invoked. GoBless uses the caller identity already authenticated by Lambda and does not re-validate `sts:RoleSessionName` in request-body policy or Lambda invoke policy. This is intentional defense in depth: STS is the authoritative enforcement point for session-name constraints, while GoBless authorizes certificate contents from the authenticated caller identity.
+
 Host certificate authorization is separate from user certificate authorization. A user allowed to request a user certificate is not automatically allowed to request host certificates.
 
 ## Rationale
